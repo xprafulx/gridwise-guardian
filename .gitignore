@@ -1,0 +1,16 @@
+# Python junk
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Environments
+venv/
+.venv/
+env/
+
+# Sensitive data
+.env
+config.json
+
+# OS files
+.DS_Store

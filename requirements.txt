@@ -1,0 +1,21 @@
+# Web & API
+fastapi
+uvicorn
+requests
+
+# Data & Math
+pandas
+numpy
+prophet
+scikit-learn
+sqlalchemy
+psycopg2-binary
+
+# MLOps & Monitoring
+mlflow
+evidently
+optuna
+python-dotenv
+
+# Frontend
+streamlit

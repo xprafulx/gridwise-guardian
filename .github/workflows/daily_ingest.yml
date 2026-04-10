@@ -1,0 +1,38 @@
+name: 03 Weekly Retraining (Sun 2 AM)
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # 2:00 AM every Sunday
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Optimize and Train Model
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+        run: python src/pipeline/train_job.py
+
+      - name: Commit and Push Model Artifacts
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add models/
+          git commit -m "🤖 Automated Sunday Retraining [$(date +'%m-%d-%Y')]" || echo "No changes to commit"
+          git push

@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:15
+    container_name: greenhour_db
+    restart: always
+    environment:
+      POSTGRES_USER: praful
+      POSTGRES_PASSWORD: praful123
+      POSTGRES_DB: greenhour
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # This line automatically runs your schema when the DB starts!
+      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+volumes:
+  postgres_data:
