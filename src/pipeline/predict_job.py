@@ -13,26 +13,31 @@ from sqlalchemy import text
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from src.database.connection import get_db_connection
 
-
 # --- CONFIG ---
 TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
-def get_historical_thresholds(area_name, engine):
-    """Calculates 33% and 83% quantiles from 2 years of history."""
+def get_dynamic_thresholds(area_name, engine):
+    """Calculates 33% and 83% benchmarks for BOTH Price and CO2 from 2yrs of history."""
     query = f"""
-        SELECT co2_emissions_g_kwh 
+        SELECT spot_price_dkk_kwh, co2_emissions_g_kwh 
         FROM processed_features 
         WHERE price_area = '{area_name.upper()}' 
         AND is_forecast = FALSE
         AND datetime_utc >= CURRENT_DATE - INTERVAL '2 years'
     """
     try:
-        hist_df = pd.read_sql(query, engine)
-        if hist_df.empty:
-            return 50.0, 150.0
-        return float(hist_df['co2_emissions_g_kwh'].quantile(0.33)), float(hist_df['co2_emissions_g_kwh'].quantile(0.83))
+        df = pd.read_sql(query, engine)
+        if df.empty:
+            return {'p33_price': 0.5, 'p83_price': 2.0, 'p33_co2': 50, 'p83_co2': 150}
+        
+        return {
+            'p33_price': float(df['spot_price_dkk_kwh'].quantile(0.33)),
+            'p83_price': float(df['spot_price_dkk_kwh'].quantile(0.83)),
+            'p33_co2': float(df['co2_emissions_g_kwh'].quantile(0.33)),
+            'p83_co2': float(df['co2_emissions_g_kwh'].quantile(0.83))
+        }
     except:
-        return 50.0, 150.0
+        return {'p33_price': 0.5, 'p83_price': 2.0, 'p33_co2': 50, 'p83_co2': 150}
 
 def download_model_from_neon(area_name):
     engine = get_db_connection()
@@ -50,9 +55,14 @@ def download_model_from_neon(area_name):
     return payload['model'], payload['features'], result[1]
 
 def get_future_prices(area_name, date):
-    url = f"https://api.energidataservice.dk/dataset/DayAheadPrices?filter={{\"PriceArea\":[\"{area_name}\"]}}&start={date.strftime('%Y-%m-%dT00:00')}&end={date.strftime('%Y-%m-%dT23:59')}"
+    url = "https://api.energidataservice.dk/dataset/DayAheadPrices"
+    params = {
+        "filter": f'{{"PriceArea":["{area_name.upper()}"]}}',
+        "start": date.strftime('%Y-%m-%dT00:00'),
+        "end": date.strftime('%Y-%m-%dT23:59')
+    }
     try:
-        res = requests.get(url, timeout=10)
+        res = requests.get(url, params=params, timeout=10)
         if res.status_code == 200:
             df = pd.DataFrame(res.json().get('records', []))
             time_col = next((c for c in ['HourUTC', 'HourDK', 'ds'] if c in df.columns), None)
@@ -65,7 +75,9 @@ def get_future_prices(area_name, date):
 def generate_full_day_forecast(area_name, engine, target_date):
     model, feature_names, db_version = download_model_from_neon(area_name)
     if model is None: return None
-    low_t, high_t = get_historical_thresholds(area_name, engine)
+    
+    # 📊 Load your 33/83 Percentile Thresholds
+    t = get_dynamic_thresholds(area_name, engine)
     prices = get_future_prices(area_name, target_date)
     if not prices: return None
 
@@ -77,22 +89,44 @@ def generate_full_day_forecast(area_name, engine, target_date):
 
     preds = []
     for h in range(24):
-        t = pd.to_datetime(target_date.replace(hour=h))
-        p = prices.get(t, list(prices.values())[0])
+        time_utc = pd.to_datetime(target_date.replace(hour=h))
+        p = prices.get(time_utc, list(prices.values())[0])
+        
         feats = {
             'spot_price_dkk_kwh': p, 'wind_speed': last_weather['wind_speed'],
             'solar_radiation': last_weather['solar_radiation'], 'hour': h,
-            'day_of_week': t.weekday(), 'month': t.month,
+            'day_of_week': time_utc.weekday(), 'month': time_utc.month,
             'hour_sin': np.sin(2*np.pi*h/24), 'hour_cos': np.cos(2*np.pi*h/24),
-            'is_holiday': 1 if t.date() in dk_holidays else 0, 'is_weekend': 1 if t.weekday()>=5 else 0,
-            'co2_lag_1h': history[-1], 'co2_lag_2h': history[-2], 'co2_lag_24h': history[-24], 'co2_lag_168h': history[-168]
+            'is_holiday': 1 if time_utc.date() in dk_holidays else 0, 
+            'is_weekend': 1 if time_utc.weekday()>=5 else 0,
+            'co2_lag_1h': history[-1], 'co2_lag_2h': history[-2], 
+            'co2_lag_24h': history[-24], 'co2_lag_168h': history[-168]
         }
-        pred = model.predict(pd.DataFrame([feats])[feature_names])[0]
-        preds.append({'datetime_utc': t, 'price_area': area_name, 'model_version': db_version, 'predicted_co2': float(pred), 'market_price_dkk_kwh': p})
-        history.append(pred)
+        
+        co2_pred = model.predict(pd.DataFrame([feats])[feature_names])[0]
+        
+        # 🛡️ THE GUARDIAN REGIONAL LOGIC
+        # Forced Avoid during Peak (17-21 UTC), or if Price/CO2 are in top 17%
+        if (17 <= h <= 21) or (p > t['p83_price']) or (co2_pred > t['p83_co2']):
+            status = "AVOID"
+        # Best only if BOTH Price and CO2 are in bottom 33%
+        elif (p < t['p33_price']) and (co2_pred < t['p33_co2']):
+            status = "BEST"
+        else:
+            status = "CAUTION"
+
+        preds.append({
+            'datetime_utc': time_utc, 
+            'price_area': area_name, 
+            'model_version': db_version, 
+            'predicted_co2': float(co2_pred), 
+            'market_price_dkk_kwh': p,
+            'recommendation_status': status
+        })
+        history.append(co2_pred)
 
     df = pd.DataFrame(preds)
-    df['recommendation_status'] = df['predicted_co2'].apply(lambda x: "GO" if x<=low_t else ("AVOID" if x>=high_t else "CAUTION"))
+    # should_charge remains for the 6 cheapest hours of the day
     df['should_charge'] = df['predicted_co2'] <= df['predicted_co2'].nsmallest(6).max()
     return df
 
@@ -112,7 +146,7 @@ def run_job():
             with engine.begin() as conn:
                 conn.execute(upsert)
                 conn.execute(text(f"DROP TABLE IF EXISTS temp_{area.lower()}"))
-            print(f"✅ {area} synced (Model: {df['model_version'].iloc[0]})")
+            print(f"✅ {area} synced with Status Logic.")
 
 if __name__ == "__main__":
     run_job()
