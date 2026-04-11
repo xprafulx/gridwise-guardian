@@ -3,7 +3,8 @@ import os
 import json
 import pandas as pd
 from datetime import datetime, timezone
-
+# --- PATH FIX ---
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from src.pipeline.predict_job import run_job as run_prediction
 from src.database.connection import get_db_connection
 
