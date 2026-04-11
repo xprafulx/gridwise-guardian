@@ -6,6 +6,11 @@ on:
     - cron: '0 18 * * *'
   workflow_dispatch:
 
+# --- CRITICAL NEW PERMISSION ---
+# This allows the GitHub Actions bot to push code back to your repo
+permissions:
+  contents: write
+
 jobs:
   predict:
     runs-on: ubuntu-latest
@@ -14,7 +19,10 @@ jobs:
 
     steps:
       - name: Checkout Code
+        # fetch-depth: 0 is important so it checks out the full git history for pushing
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,10 +33,18 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate Strategy
-        # Consistency check: use -m if it's in src/pipeline/predict_job.py
-        # Or keep as is if run_forecast.py is in your root folder!
+      - name: Generate Strategy & Export JSON
         run: python run_forecast.py
+
+      # --- THE PRESTIGE STEP: COMMIT & PUSH ---
+      - name: Push Static API to GitHub
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/latest_forecast.json
+          # The '|| echo' part prevents the action from failing if the data randomly happens to be exactly the same
+          git commit -m "auto: sync daily forecast JSON for UI" || echo "No changes to commit"
+          git push
 
       - name: Archive Forecast Logs
         if: always()
