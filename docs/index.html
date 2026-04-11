@@ -48,16 +48,24 @@
             margin-bottom: 30px;
         }
 
-        /* --- THE WIDTH FIX --- */
+        /* --- THE STRETCH FIX: Minimal horizontal padding --- */
         main {
-            flex: 1; /* Forces main to take up all remaining space */
+            flex: 1; 
             width: 100%;
-            padding: 40px 5%; /* Responsive padding */
+            padding: 40px 3%; /* Stretches to the edges */
             overflow-y: auto;
             box-sizing: border-box;
         }
 
-        /* INTERACTIVE DROPDOWN */
+        /* INTERACTIVE DROPDOWNS */
+        .select-label {
+            font-size: 11px; 
+            color: #475569; 
+            margin-bottom: 5px; 
+            text-transform: uppercase; 
+            letter-spacing: 2px;
+            font-weight: 700;
+        }
         select {
             background: rgba(255,255,255,0.03);
             border: 1px solid rgba(255,255,255,0.05);
@@ -90,8 +98,8 @@
             flex: 1;
             background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
             border: 1px solid rgba(255, 255, 255, 0.04);
-            padding: 35px 25px;
-            border-radius: 24px;
+            padding: 30px 20px;
+            border-radius: 16px;
             text-align: center;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
@@ -103,9 +111,9 @@
             transform: scale(1.02);
         }
 
-        .kpi-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 15px; }
-        .kpi-value { font-size: 2.8rem; font-weight: 900; color: #F8FAFC; line-height: 1; font-family: 'Space Grotesk'; }
-        .kpi-sub { font-size: 0.9rem; margin-top: 10px; font-weight: 500; letter-spacing: 0.05em; }
+        .kpi-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 10px; }
+        .kpi-value { font-size: 2.5rem; font-weight: 900; color: #F8FAFC; line-height: 1; font-family: 'Space Grotesk'; }
+        .kpi-sub { font-size: 0.85rem; margin-top: 10px; font-weight: 700; letter-spacing: 0.05em; }
 
         table {
             width: 100%;
@@ -124,18 +132,24 @@
             font-size: 12px; 
             padding: 15px; 
             border-bottom: 1px solid rgba(255,255,255,0.05);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         td { 
             padding: 15px; 
             border-bottom: 1px solid rgba(255,255,255,0.02); 
+            color: #94A3B8;
         }
 
+        /* The Deep Velvet Active Row */
         .highlight-row {
-            background-color: rgba(56, 189, 248, 0.08); 
-            font-weight: 900; 
-            color: #FFFFFF; 
-            border-bottom: 2px solid #38BDF8;
+            background-color: rgba(0, 209, 255, 0.1) !important; 
+        }
+        .highlight-row td {
+            font-weight: 900 !important; 
+            color: #00D1FF !important; 
+            border-bottom: 2px solid #38BDF8 !important;
         }
 
         .clock-container {
@@ -157,20 +171,26 @@
 
     <aside>
         <h2 class="sidebar-title">GRIDWISE</h2>
-        <div style="font-size: 12px; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 2px;">Region Select</div>
         
+        <div class="select-label">Region</div>
         <select id="regionSelect" onchange="updateDashboard()">
             <option value="DK1">DK1 Strategy Area</option>
             <option value="DK2" selected>DK2 Strategy Area</option>
+        </select>
+
+        <div class="select-label">Timeline</div>
+        <select id="timelineSelect" onchange="updateDashboard()">
+            <option value="Forecast">Today (Forecast)</option>
+            <option value="Historical">Yesterday (Historical)</option>
         </select>
         
         <div class="clock-container">
             <svg width="170" height="170" viewBox="0 0 200 200">
                 <circle cx="100" cy="100" r="95" stroke="rgba(255,255,255,0.02)" stroke-width="1" fill="none" />
-                <circle cx="100" cy="100" r="12" fill="#F59E0B" style="filter:blur(10px); opacity:0.5;">
+                <circle cx="100" cy="100" r="12" id="centerGlow" fill="#F59E0B" style="filter:blur(10px); opacity:0.5;">
                     <animate attributeName="opacity" values="0.2;0.6;0.2" dur="3s" repeatCount="indefinite" />
                 </circle>
-                <circle cx="100" cy="100" r="5" fill="#F59E0B" />
+                <circle cx="100" cy="100" r="5" id="centerDot" fill="#F59E0B" />
                 
                 <g id="marks"></g>
                 <line id="h" x1="100" y1="100" x2="100" y2="65" stroke="#fff" stroke-width="5" stroke-linecap="round" />
@@ -179,9 +199,9 @@
             </svg>
             
             <div style="margin-top:25px; text-align:center; width:100%;">
-                <div style="color:#F59E0B; font-weight:700; font-size:10px; letter-spacing:4px; text-transform:uppercase; margin-bottom:8px; opacity:0.8;">CAUTION NOW</div>
-                <div style="color:#fff; font-weight:700; font-size:12px; letter-spacing:1px; text-shadow: 0 0 15px #ffffff66; animation: pulse 2s infinite;">
-                    🟡 LIMIT LOAD FOR 13H
+                <div id="tickerStatus" style="color:#F59E0B; font-weight:700; font-size:10px; letter-spacing:4px; text-transform:uppercase; margin-bottom:8px; opacity:0.8;">CAUTION NOW</div>
+                <div id="tickerMsg" style="color:#fff; font-weight:700; font-size:12px; letter-spacing:1px; text-shadow: 0 0 15px #ffffff66; animation: pulse 2s infinite;">
+                    🟡 LIMIT LOAD FOR 1H
                 </div>
             </div>
         </div>
@@ -193,17 +213,17 @@
         <div class="kpi-container">
             <div class="kpi-card">
                 <div class="kpi-label">Optimal Point</div>
-                <div class="kpi-value" id="kpiBestTime">03:00</div>
-                <div class="kpi-sub" style="color:#10B981" id="kpiBestCo2">49g CO2</div>
+                <div class="kpi-value" id="kpiBestTime">--:--</div>
+                <div class="kpi-sub" style="color:#10B981" id="kpiBestCo2">--g CO2</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Peak Stress</div>
-                <div class="kpi-value" id="kpiWorstTime">17:00</div>
-                <div class="kpi-sub" style="color:#EF4444" id="kpiWorstCo2">68g CO2</div>
+                <div class="kpi-value" id="kpiWorstTime">--:--</div>
+                <div class="kpi-sub" style="color:#EF4444" id="kpiWorstCo2">--g CO2</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Grid Mean</div>
-                <div class="kpi-value" id="kpiMean">57.7g</div>
+                <div class="kpi-value" id="kpiMean">--g</div>
                 <div class="kpi-sub" style="color:#38BDF8">Intensity Baseline</div>
             </div>
         </div>
@@ -211,7 +231,7 @@
         <h3>Forecast Overview</h3>
         <div id="chart" style="width:100%; height:380px; margin-bottom: 20px;"></div>
 
-        <h3>Full 24-Hour Breakdown</h3>
+        <h3 id="tableTitle">Full 24-Hour Breakdown</h3>
         <table>
             <thead>
                 <tr>
@@ -227,56 +247,152 @@
     </main>
 
     <script>
-        // --- 1. HANDLE REGION CHANGES ---
-        function updateDashboard() {
-            const region = document.getElementById("regionSelect").value;
-            document.getElementById("dashboardTitle").innerText = `${region} Strategy | Docs & Incident UI`;
-            
-            // In a real app, you would fetch new data here.
-            // For now, we update the title to show it's working!
+        // --- PERCENTILE LOGIC (33% & 83% Quartiles) ---
+        function getPercentile(data, percentile) {
+            const sorted = [...data].sort((a, b) => a - b);
+            const index = (percentile / 100) * (sorted.length - 1);
+            const lower = Math.floor(index);
+            const upper = Math.ceil(index);
+            const weight = index - lower;
+            if (upper >= sorted.length) return sorted[lower];
+            return sorted[lower] * (1 - weight) + sorted[upper] * weight;
         }
 
-        // --- 2. DYNAMICALLY GENERATE 24-HOUR TABLE ---
-        function generateTable() {
-            const tbody = document.getElementById('dataTableBody');
-            let tableHTML = '';
+        // --- CORE LOGIC ENGINE ---
+        function updateDashboard() {
+            const region = document.getElementById("regionSelect").value;
+            const timeline = document.getElementById("timelineSelect").value;
             const currentHour = new Date().getHours();
+            
+            // 1. Update Titles
+            document.getElementById("dashboardTitle").innerText = `${region} Strategy | ${timeline}`;
+            document.getElementById("tableTitle").innerText = timeline === "Historical" ? "Historical 24-Hour Analysis" : "Forecast 24-Hour Breakdown";
+
+            // 2. Generate Data based on inputs (Simulating DB Fetch)
+            let co2Data = [];
+            let priceData = [];
+            let xVals = [];
+            
+            // Generate different data patterns for DK1/DK2 and History
+            let baseCo2 = region === "DK1" ? 30 : 50; 
+            if (timeline === "Historical") baseCo2 += 20;
 
             for(let i = 0; i < 24; i++) {
-                let timeStr = (i < 10 ? '0' + i : i) + ':00';
+                xVals.push((i < 10 ? '0' + i : i) + ':00');
+                // Simulate a daily curve (higher in morning/evening)
+                let curve = Math.sin(i * Math.PI / 12) * 20;
+                let noise = Math.random() * 15;
+                co2Data.push(Math.max(10, baseCo2 + curve + noise));
+                priceData.push(0.5 + (co2Data[i] / 150) + (Math.random() * 0.1));
+            }
+
+            // 3. Calculate Exact 33% and 83% Thresholds
+            const p33 = getPercentile(co2Data, 33);
+            const p83 = getPercentile(co2Data, 83);
+
+            let barColors = [];
+            let statuses = [];
+            
+            let bestVal = 9999, bestIdx = 0;
+            let worstVal = -9999, worstIdx = 0;
+            let sumCo2 = 0;
+
+            // 4. Determine Statuses
+            for(let i = 0; i < 24; i++) {
+                let co2 = co2Data[i];
+                sumCo2 += co2;
                 
-                // Simulate Data
-                let price = (0.7 + Math.random() * 0.2).toFixed(3);
-                let co2 = (40 + Math.random() * 30).toFixed(1);
-                
-                // Logic for status
-                let statusIcon = i < 7 ? '🟢 BEST' : (i > 16 ? '🔴 AVOID' : '🟡 CAUTION');
-                
-                // Highlight the current hour
+                if (co2 < bestVal) { bestVal = co2; bestIdx = i; }
+                if (co2 > worstVal) { worstVal = co2; worstIdx = i; }
+
+                if (co2 <= p33) {
+                    barColors.push('#10B981'); // BEST
+                    statuses.push({ text: '🟢 BEST', color: '#10B981', type: 'BEST' });
+                } else if (co2 > p33 && co2 <= p83) {
+                    barColors.push('#F59E0B'); // CAUTION
+                    statuses.push({ text: '🟡 CAUTION', color: '#F59E0B', type: 'CAUTION' });
+                } else {
+                    barColors.push('#EF4444'); // AVOID
+                    statuses.push({ text: '🔴 AVOID', color: '#EF4444', type: 'AVOID' });
+                }
+            }
+
+            // 5. Update KPI Cards
+            document.getElementById("kpiBestTime").innerText = xVals[bestIdx];
+            document.getElementById("kpiBestCo2").innerText = `${bestVal.toFixed(1)}g CO2`;
+            document.getElementById("kpiWorstTime").innerText = xVals[worstIdx];
+            document.getElementById("kpiWorstCo2").innerText = `${worstVal.toFixed(1)}g CO2`;
+            document.getElementById("kpiMean").innerText = `${(sumCo2/24).toFixed(1)}g`;
+
+            // 6. Update Table
+            const tbody = document.getElementById('dataTableBody');
+            let tableHTML = '';
+            for(let i = 0; i < 24; i++) {
                 let isCurrent = (i === currentHour);
                 let rowClass = isCurrent ? 'class="highlight-row"' : '';
-                let timeLabel = isCurrent ? `${timeStr} (NOW)` : timeStr;
+                let timeLabel = isCurrent ? `${xVals[i]} (NOW)` : xVals[i];
 
                 tableHTML += `
                     <tr ${rowClass}>
-                        <td style="font-weight: ${isCurrent ? '900' : 'normal'}">${timeLabel}</td>
-                        <td>${price}</td>
-                        <td>${co2}</td>
-                        <td style="font-weight: 700;">${statusIcon}</td>
+                        <td>${timeLabel}</td>
+                        <td>${priceData[i].toFixed(3)}</td>
+                        <td>${co2Data[i].toFixed(1)}</td>
+                        <td style="font-weight: 700; color: ${isCurrent ? '#00D1FF' : statuses[i].color}">${statuses[i].text}</td>
                     </tr>
                 `;
             }
             tbody.innerHTML = tableHTML;
+
+            // 7. Update Chart
+            const traceBars = {
+                x: xVals, y: priceData, type: 'bar',
+                marker: { color: barColors, opacity: 0.4 },
+                yaxis: 'y1'
+            };
+            const traceLine = {
+                x: xVals, y: co2Data, type: 'scatter', mode: 'lines',
+                line: {color: '#38BDF8', width: 4, shape: 'spline'},
+                yaxis: 'y2'
+            };
+            const layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#F1F5F9', family: 'Outfit' },
+                margin: { l: 0, r: 0, t: 0, b: 0 },
+                showlegend: false, barmode: 'overlay',
+                xaxis: { showgrid: false, zeroline: false },
+                yaxis: { showgrid: false, zeroline: false, side: 'left' },
+                yaxis2: { showgrid: false, zeroline: false, overlaying: 'y', side: 'right' }
+            };
+            Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
+
+            // 8. Update Sidebar Ticker & Clock Colors
+            let currentStatus = statuses[currentHour] || statuses[0];
+            document.getElementById("centerDot").setAttribute("fill", currentStatus.color);
+            document.getElementById("centerGlow").setAttribute("fill", currentStatus.color);
+            document.getElementById("tickerStatus").innerText = `${currentStatus.type} NOW`;
+            document.getElementById("tickerStatus").style.color = currentStatus.color;
+            
+            let duration = 0;
+            for(let i = currentHour; i < 24; i++) {
+                if (statuses[i].type === currentStatus.type) duration++;
+                else break;
+            }
+            let msgMap = {
+                'BEST': `🟢 SAFE TO CHARGE FOR ${duration}H`,
+                'AVOID': `🔴 HALT USAGE FOR ${duration}H`,
+                'CAUTION': `🟡 LIMIT LOAD FOR ${duration}H`
+            };
+            document.getElementById("tickerMsg").innerText = msgMap[currentStatus.type];
         }
 
-        // --- 3. CLOCK LOGIC ---
+        // --- SVG CLOCK ANIMATION ---
         const g = document.getElementById('marks');
         for (let i=0; i<12; i++) {
             const a = (i*30)*(Math.PI/180);
             const x = 100+84*Math.sin(a); const y = 100-84*Math.cos(a);
             const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
             c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","3.5");
-            c.setAttribute("fill", i < 4 || i > 18 ? '#10B981' : (i > 6 && i < 10 ? '#EF4444' : '#F59E0B')); 
+            c.setAttribute("fill", "#475569"); 
             g.appendChild(c);
         }
 
@@ -291,41 +407,8 @@
         }
         setInterval(tick, 1000); tick();
 
-        // --- 4. PLOTLY CHART ---
-        const xVals = Array.from({length: 24}, (_, i) => `${i < 10 ? '0'+i : i}:00`);
-        const traceBars = {
-            x: xVals,
-            y: Array.from({length: 24}, () => Math.random()),
-            type: 'bar',
-            marker: {
-                color: xVals.map((_, i) => i < 5 ? '#EF4444' : (i < 15 ? '#F59E0B' : '#10B981')),
-                opacity: 0.4
-            },
-            yaxis: 'y1'
-        };
-        const traceLine = {
-            x: xVals,
-            y: Array.from({length: 24}, () => 40 + Math.random() * 40),
-            type: 'scatter',
-            mode: 'lines',
-            line: {color: '#38BDF8', width: 4, shape: 'spline'},
-            yaxis: 'y2'
-        };
-        const layout = {
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { color: '#F1F5F9', family: 'Outfit' },
-            margin: { l: 0, r: 0, t: 0, b: 0 },
-            showlegend: false,
-            barmode: 'overlay',
-            xaxis: { showgrid: false, zeroline: false },
-            yaxis: { showgrid: false, zeroline: false, side: 'left' },
-            yaxis2: { showgrid: false, zeroline: false, overlaying: 'y', side: 'right' }
-        };
-        Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
-
-        // Initialize table on load
-        generateTable();
+        // Initialize on load
+        updateDashboard();
     </script>
 </body>
 </html>
