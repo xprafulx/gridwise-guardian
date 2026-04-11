@@ -5,8 +5,8 @@ import pandas as pd
 from datetime import datetime, timezone
 
 # --- PATH FIX ---
-# Ensures the script can find the 'src' folder from the root
-sys.path.append(os.getcwd())
+# Ensures the script can find the 'src' folder regardless of where it's called from
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
 from src.pipeline.predict_job import run_job as run_prediction
 from src.database.connection import get_db_connection
@@ -18,12 +18,13 @@ def export_static_api():
     
     engine = get_db_connection()
 
-    # 1. Fetch the fresh forecast that Step 1 just generated
-    # We use the updated column: 'market_price_dkk_kwh'
+    # 🛠️ IMPROVED QUERY: 
+    # We grab the last 12 hours + everything in the future. 
+    # This ensures that even at 00:35 AM, your dashboard shows "Today's" data.
     forecast_query = """
         SELECT datetime_utc, market_price_dkk_kwh, predicted_co2, price_area, recommendation_status
         FROM ai_forecasts 
-        WHERE DATE(datetime_utc) >= CURRENT_DATE
+        WHERE datetime_utc >= NOW() - INTERVAL '12 hours'
         ORDER BY datetime_utc ASC
     """
     
@@ -45,7 +46,7 @@ def export_static_api():
             "price": round(float(row['market_price_dkk_kwh']), 3),
             "co2": round(float(row['predicted_co2']), 1),
             "region": row['price_area'],
-            "status": row['recommendation_status'] # Pushes 'GO', 'CAUTION', or 'AVOID' to your UI
+            "status": row['recommendation_status'] # Now reflects BEST, CAUTION, or AVOID
         })
 
     # 3. Prepare the final payload
@@ -55,9 +56,12 @@ def export_static_api():
     }
 
     # 4. Save to docs/latest_forecast.json
-    os.makedirs('docs', exist_ok=True)
-    file_path = 'docs/latest_forecast.json'
+    # Using absolute pathing for GitHub Actions stability
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    docs_dir = os.path.join(base_dir, 'docs')
+    os.makedirs(docs_dir, exist_ok=True)
     
+    file_path = os.path.join(docs_dir, 'latest_forecast.json')
     with open(file_path, 'w') as f:
         json.dump(payload, f, indent=4)
 
@@ -68,7 +72,7 @@ def main():
     print("⚡️ GREENHOUR DAILY PIPELINE STARTED")
     print("="*40)
     
-    # STEP 1: Predict & Recommend (Now handled entirely by predict_job.py)
+    # STEP 1: Predict & Recommend (Using your Q1/Q3 regional logic)
     try:
         run_prediction()
     except Exception as e:
@@ -83,7 +87,7 @@ def main():
         return
 
     print("\n" + "="*40)
-    print("✅ SUCCESS: Tomorrow's grid strategy is ready in Neon AND GitHub Docs!")
+    print("✅ SUCCESS: The Guardian strategy is synced to Neon and GitHub!")
 
 if __name__ == "__main__":
     main()
