@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS ai_forecasts (
     model_version VARCHAR(50) NOT NULL, 
     
     predicted_co2 FLOAT,
-    predicted_price_dkk_kwh FLOAT,
+    market_price_dkk_kwh FLOAT,
     should_charge BOOLEAN, 
     
     -- 🟢 ADD THIS LINE BELOW:
