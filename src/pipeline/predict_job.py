@@ -14,7 +14,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from src.database.connection import get_db_connection
 
 # --- CONFIG ---
-TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+# This logic ensures that even if you run it at 12:40 AM Sunday, 
+# it correctly targets Sunday, April 12th.
+now_utc = datetime.now(timezone.utc)
+TARGET_DATE = (now_utc + timedelta(hours=2)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+print(f"🎯 Target confirmed: Predicting for {TARGET_DATE.date()}")
+# --- CONFIG ---
+# TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 def get_dynamic_thresholds(area_name, engine):
     """Calculates 33% and 83% benchmarks for BOTH Price and CO2 from 2yrs of history."""
