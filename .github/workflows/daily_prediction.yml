@@ -34,6 +34,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate Strategy & Export JSON
+        env:
+          # This forces the secret directly into Python's environment
+          DATABASE_URL: ${{ secrets.DATABASE_URL }} 
         run: python run_forecast.py
 
       # --- THE PRESTIGE STEP: COMMIT & PUSH ---
