@@ -13,15 +13,21 @@ from sqlalchemy import text
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from src.database.connection import get_db_connection
 
-# --- CONFIG ---
-# This logic ensures that even if you run it at 12:40 AM Sunday, 
-# it correctly targets Sunday, April 12th.
-now_utc = datetime.now(timezone.utc)
-TARGET_DATE = (now_utc + timedelta(hours=2)).replace(hour=0, minute=0, second=0, microsecond=0)
+# ==========================================================
+# 🔄 TOGGLE SWITCH: Change to "TODAY" or "TOMORROW"
+MODE = "TODAY" 
+# ==========================================================
 
-print(f"🎯 Target confirmed: Predicting for {TARGET_DATE.date()}")
-# --- CONFIG ---
-# TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+now_utc = datetime.now(timezone.utc)
+
+if MODE == "TODAY":
+    # Snaps to 00:00 of the current Danish Day
+    TARGET_DATE = (now_utc + timedelta(hours=2)).replace(hour=0, minute=0, second=0, microsecond=0)
+else:
+    # Snaps to 00:00 of Tomorrow
+    TARGET_DATE = (now_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+print(f"🎯 MODE: {MODE} | Predicting for: {TARGET_DATE.date()}")
 
 def get_dynamic_thresholds(area_name, engine):
     """Calculates 33% and 83% benchmarks for BOTH Price and CO2 from 2yrs of history."""
@@ -83,10 +89,11 @@ def generate_full_day_forecast(area_name, engine, target_date):
     model, feature_names, db_version = download_model_from_neon(area_name)
     if model is None: return None
     
-    # 📊 Load your 33/83 Percentile Thresholds
     t = get_dynamic_thresholds(area_name, engine)
     prices = get_future_prices(area_name, target_date)
-    if not prices: return None
+    if not prices: 
+        print(f"⚠️ No prices found for {area_name} on {target_date.date()}. skipping...")
+        return None
 
     query = f"SELECT datetime_utc, co2_emissions_g_kwh, wind_speed, solar_radiation FROM processed_features WHERE price_area='{area_name.upper()}' AND is_forecast=FALSE ORDER BY datetime_utc DESC LIMIT 169"
     recent = pd.read_sql(query, engine)
@@ -96,7 +103,7 @@ def generate_full_day_forecast(area_name, engine, target_date):
 
     preds = []
     for h in range(24):
-        time_utc = pd.to_datetime(target_date.replace(hour=h))
+        time_utc = pd.to_datetime(target_date.replace(hour=h), utc=True)
         p = prices.get(time_utc, list(prices.values())[0])
         
         feats = {
@@ -113,10 +120,8 @@ def generate_full_day_forecast(area_name, engine, target_date):
         co2_pred = model.predict(pd.DataFrame([feats])[feature_names])[0]
         
         # 🛡️ THE GUARDIAN REGIONAL LOGIC
-        # Forced Avoid during Peak (17-21 UTC), or if Price/CO2 are in top 17%
         if (17 <= h <= 21) or (p > t['p83_price']) or (co2_pred > t['p83_co2']):
             status = "AVOID"
-        # Best only if BOTH Price and CO2 are in bottom 33%
         elif (p < t['p33_price']) and (co2_pred < t['p33_co2']):
             status = "BEST"
         else:
@@ -133,7 +138,6 @@ def generate_full_day_forecast(area_name, engine, target_date):
         history.append(co2_pred)
 
     df = pd.DataFrame(preds)
-    # should_charge remains for the 6 cheapest hours of the day
     df['should_charge'] = df['predicted_co2'] <= df['predicted_co2'].nsmallest(6).max()
     return df
 
@@ -153,7 +157,7 @@ def run_job():
             with engine.begin() as conn:
                 conn.execute(upsert)
                 conn.execute(text(f"DROP TABLE IF EXISTS temp_{area.lower()}"))
-            print(f"✅ {area} synced with Status Logic.")
+            print(f"✅ {area} synced ({MODE})")
 
 if __name__ == "__main__":
     run_job()
