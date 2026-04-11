@@ -44,6 +44,12 @@ jobs:
             echo "✅ THE SECRET IS LOADED. Python should be able to see it."
           fi
           
+      # --- THIS IS THE STEP THAT WAS MISSING ---
+      - name: Generate Strategy & Export JSON
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python run_forecast.py
+          
       - name: Push Static API to GitHub
         run: |
           git config --global user.name "github-actions[bot]"
