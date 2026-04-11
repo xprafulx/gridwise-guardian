@@ -14,7 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from src.database.connection import get_db_connection
 
 # --- CONFIG ---
-TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=0)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 def get_historical_thresholds(area_name, engine):
     """Calculates 33% and 83% quantiles from 2 years of history."""
