@@ -5,23 +5,18 @@ import pandas as pd
 from datetime import datetime, timezone
 
 # --- PATH FIX ---
-# Ensures the script can find the 'src' folder regardless of where it's called from
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
 from src.pipeline.predict_job import run_job as run_prediction
 from src.database.connection import get_db_connection
 
 def export_static_api():
-    """Generates the Static JSON API for the GitHub Pages UI"""
     print("\n" + "-"*40)
     print("🌐 Step 2: Building Static API for UI Sync...")
     
     engine = get_db_connection()
 
-    # 🛠️ IMPROVED QUERY: 
-    # We grab the last 12 hours + everything in the future. 
-    # This ensures that even at 00:35 AM, your dashboard shows "Today's" data.
-# Grab everything from the last 12 hours up to the future
+    # Grab the last 12 hours + future to handle the midnight rollover
     forecast_query = """
         SELECT datetime_utc, market_price_dkk_kwh, predicted_co2, price_area, recommendation_status
         FROM ai_forecasts 
@@ -36,10 +31,9 @@ def export_static_api():
         return
 
     if forecast_df.empty:
-        print("⚠️ No data in ai_forecasts to export. Check if predict_job ran correctly.")
+        print("⚠️ No data in ai_forecasts to export.")
         return
 
-    # 2. Format the data for the JavaScript frontend
     forecast_list = []
     for _, row in forecast_df.iterrows():
         forecast_list.append({
@@ -47,22 +41,38 @@ def export_static_api():
             "price": round(float(row['market_price_dkk_kwh']), 3),
             "co2": round(float(row['predicted_co2']), 1),
             "region": row['price_area'],
-            "status": row['recommendation_status'] # Now reflects BEST, CAUTION, or AVOID
+            "status": row['recommendation_status'] 
         })
 
-    # 3. Prepare the final payload
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "forecast": forecast_list
     }
 
-    # 4. Save to docs/latest_forecast.json
-    # Using absolute pathing for GitHub Actions stability
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    docs_dir = os.path.join(base_dir, 'docs')
-    os.makedirs(docs_dir, exist_ok=True)
+    os.makedirs('docs', exist_ok=True)
+    file_path = 'docs/latest_forecast.json'
     
-    file_path = os.path.join(docs_dir, 'latest_forecast.json')
+    with open(file_path, 'w') as f:
+        json.dump(payload, f, indent=4)
+
+    print(f"✅ Static API JSON dumped successfully at: {file_path}")
+
+def main():
+    print("⚡️ GREENHOUR DAILY PIPELINE STARTED")
+    print("="*40)
+    
+    try:
+        run_prediction()
+        export_static_api()
+    except Exception as e:
+        print(f"❌ Pipeline Failed: {e}")
+        return
+
+    print("\n" + "="*40)
+    print("✅ SUCCESS: The Guardian strategy is synced to Neon and GitHub!")
+
+if __name__ == "__main__":
+    main()    file_path = os.path.join(docs_dir, 'latest_forecast.json')
     with open(file_path, 'w') as f:
         json.dump(payload, f, indent=4)
 
