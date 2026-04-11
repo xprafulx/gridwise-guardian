@@ -1,0 +1,14 @@
+[theme]
+# The Base
+base="dark"
+
+# The Deep Velvet Backgrounds
+backgroundColor="#020617"
+secondaryBackgroundColor="#1E293B"
+
+# The Glowing Text
+textColor="#F1F5F9"
+
+# The Seductive Accents
+primaryColor="#00D1FF"
+font="sans serif"
