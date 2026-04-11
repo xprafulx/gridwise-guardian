@@ -14,16 +14,12 @@ from sqlalchemy import text
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 # --- CONFIG ---
-# Snaps to the start of the current UTC day
-# --- CONFIG ---
-# Snaps to the start of TOMORROW in UTC
+# Target is tomorrow to ensure we stay ahead of the grid
 TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-MODEL_VERSION = "xgb_v1_baseline"
 
 def download_model_from_neon(area_name):
     """
-    Retrieves the active model binary from Neon Model Registry.
-    This allows the script to run without local .pkl files.
+    Retrieves the active model binary and its true version name from Neon.
     """
     engine = get_db_connection()
     area_key = f"co2_{area_name.lower()}"
@@ -31,7 +27,7 @@ def download_model_from_neon(area_name):
     print(f"📡 Downloading active model for {area_name} from Neon...")
     
     query = text("""
-        SELECT model_binary 
+        SELECT model_binary, model_version 
         FROM model_registry 
         WHERE model_name = :name AND is_active = TRUE
         ORDER BY created_at DESC LIMIT 1
@@ -42,25 +38,24 @@ def download_model_from_neon(area_name):
         
     if not result:
         print(f"❌ No active model found in Neon for {area_name}!")
-        return None, None
+        return None, None, None
 
-    # Load the binary 'blob' into joblib via a buffer
     model_bytes = result[0]
+    model_version = result[1]
+    
     buffer = io.BytesIO(model_bytes)
     payload = joblib.load(buffer)
     
-    print(f"✅ Model {area_name} loaded successfully.")
-    return payload['model'], payload['features']
+    print(f"✅ Model {area_name} (Version: {model_version}) loaded successfully.")
+    return payload['model'], payload['features'], model_version
 
 def find_time_column(df):
-    """Safely finds a timestamp column regardless of API naming quirks."""
     candidates = ['HourUTC', 'Minutes5UTC', 'HourDK', 'Minutes5DK', 'TimeDK', 'ds']
     for col in candidates:
         if col in df.columns: return col
     return None
 
 def get_future_prices(area_name, date):
-    """Fetches Day-Ahead prices for the target date."""
     start_str = date.strftime('%Y-%m-%dT00:00')
     end_str = date.strftime('%Y-%m-%dT23:59')
     url = f"https://api.energidataservice.dk/dataset/DayAheadPrices?filter={{\"PriceArea\":[\"{area_name}\"]}}&start={start_str}&end={end_str}"
@@ -87,8 +82,8 @@ def get_future_prices(area_name, date):
 def generate_full_day_forecast(area_name, engine, target_date):
     area_name = area_name.upper()
     
-    # 📥 MLOps Fetch: Pull model from DB instead of local file
-    model, feature_names = download_model_from_neon(area_name)
+    # 📥 MLOps Fetch: Pull model AND version from DB
+    model, feature_names, db_version = download_model_from_neon(area_name)
     
     if model is None: return None
 
@@ -112,9 +107,9 @@ def generate_full_day_forecast(area_name, engine, target_date):
 
     for hour in range(24):
         current_time = pd.to_datetime(target_date.replace(hour=hour))
-        
-        # Safely get price
         price_val = prices.get(current_time, 0)
+        
+        # Fallback for missing price points
         if price_val == 0 and prices:
             price_val = list(prices.values())[0]
 
@@ -141,14 +136,15 @@ def generate_full_day_forecast(area_name, engine, target_date):
         predictions.append({
             'datetime_utc': current_time,
             'price_area': area_name,
-            'model_version': MODEL_VERSION,
+            'model_version': db_version, # Dynamic versioning from Neon!
             'predicted_co2': float(pred_co2),
             'market_price_dkk_kwh': feats['spot_price_dkk_kwh']
         })
         history.append(pred_co2)
 
     df_preds = pd.DataFrame(predictions)
-    # Smart logic: Set 'should_charge' for the 6 cleanest hours
+    
+    # Guardian Logic: Identify the 6 cleanest hours for EV charging
     threshold = df_preds['predicted_co2'].nsmallest(6).max()
     df_preds['should_charge'] = df_preds['predicted_co2'] <= threshold
     
@@ -162,11 +158,18 @@ def run_job():
         forecast_df = generate_full_day_forecast(area, engine, TARGET_DATE)
         
         if forecast_df is not None:
-            # Sync to Gold Layer
+            # Sync to Gold Layer (ai_forecasts)
             forecast_df.to_sql(f'temp_{area.lower()}', engine, if_exists='replace', index=False)
+            
+            # The Clean Upsert: Matches your new 'market_price' schema
             upsert_query = text(f"""
-                INSERT INTO ai_forecasts (datetime_utc, price_area, model_version, predicted_co2, predicted_price_dkk_kwh, should_charge)
-                SELECT datetime_utc, price_area, model_version, predicted_co2, predicted_price_dkk_kwh, should_charge 
+                INSERT INTO ai_forecasts (
+                    datetime_utc, price_area, model_version, 
+                    predicted_co2, market_price_dkk_kwh, should_charge
+                )
+                SELECT 
+                    datetime_utc, price_area, model_version, 
+                    predicted_co2, market_price_dkk_kwh, should_charge 
                 FROM temp_{area.lower()}
                 ON CONFLICT (datetime_utc, price_area, model_version) 
                 DO UPDATE SET 
@@ -175,10 +178,12 @@ def run_job():
                     should_charge = EXCLUDED.should_charge,
                     prediction_timestamp = CURRENT_TIMESTAMP;
             """)
+            
             with engine.begin() as conn:
                 conn.execute(upsert_query)
                 conn.execute(text(f"DROP TABLE IF EXISTS temp_{area.lower()};"))
-            print(f"✅ {area} forecasts synced to Neon.")
+                
+            print(f"✅ {area} forecasts synced to Neon with version: {forecast_df['model_version'].iloc[0]}")
 
 if __name__ == "__main__":
     run_job()
