@@ -171,7 +171,7 @@ def run_job():
                 ON CONFLICT (datetime_utc, price_area, model_version) 
                 DO UPDATE SET 
                     predicted_co2 = EXCLUDED.predicted_co2,
-                    predicted_price_dkk_kwh = EXCLUDED.predicted_price_dkk_kwh,
+                    market_price_dkk_kwh = EXCLUDED.market_price_dkk_kwh,
                     should_charge = EXCLUDED.should_charge,
                     prediction_timestamp = CURRENT_TIMESTAMP;
             """)
