@@ -16,7 +16,7 @@ def export_static_api():
     
     engine = get_db_connection()
 
-    # Grab the last 12 hours + future to handle the midnight rollover
+    # Grab the last 12 hours + future
     forecast_query = """
         SELECT datetime_utc, market_price_dkk_kwh, predicted_co2, price_area, recommendation_status
         FROM ai_forecasts 
@@ -66,35 +66,6 @@ def main():
         export_static_api()
     except Exception as e:
         print(f"❌ Pipeline Failed: {e}")
-        return
-
-    print("\n" + "="*40)
-    print("✅ SUCCESS: The Guardian strategy is synced to Neon and GitHub!")
-
-if __name__ == "__main__":
-    main()    file_path = os.path.join(docs_dir, 'latest_forecast.json')
-    with open(file_path, 'w') as f:
-        json.dump(payload, f, indent=4)
-
-    print(f"✅ Static API JSON dumped successfully at: {file_path}")
-
-
-def main():
-    print("⚡️ GREENHOUR DAILY PIPELINE STARTED")
-    print("="*40)
-    
-    # STEP 1: Predict & Recommend (Using your Q1/Q3 regional logic)
-    try:
-        run_prediction()
-    except Exception as e:
-        print(f"❌ Pipeline Failed at Prediction Step: {e}")
-        return
-
-    # STEP 2: Export JSON for GitHub Pages
-    try:
-        export_static_api()
-    except Exception as e:
-        print(f"❌ Pipeline Failed at JSON Export: {e}")
         return
 
     print("\n" + "="*40)
