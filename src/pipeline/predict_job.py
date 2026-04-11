@@ -143,7 +143,7 @@ def generate_full_day_forecast(area_name, engine, target_date):
             'price_area': area_name,
             'model_version': MODEL_VERSION,
             'predicted_co2': float(pred_co2),
-            'predicted_price_dkk_kwh': feats['spot_price_dkk_kwh']
+            'market_price_dkk_kwh': feats['spot_price_dkk_kwh']
         })
         history.append(pred_co2)
 
