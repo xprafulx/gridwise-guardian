@@ -15,7 +15,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 # --- CONFIG ---
 # Snaps to the start of the current UTC day
-TARGET_DATE = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+# --- CONFIG ---
+# Snaps to the start of TOMORROW in UTC
+TARGET_DATE = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 MODEL_VERSION = "xgb_v1_baseline"
 
 def download_model_from_neon(area_name):
