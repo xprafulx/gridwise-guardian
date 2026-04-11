@@ -20,8 +20,6 @@ MODE = "TODAY"
 # ==========================================================
 
 # 🕰️ IRON-CLAD DATE LOGIC
-# We get the current UTC time, shift it slightly to align with Denmark's calendar, 
-# and lock it to exactly 00:00:00
 now_utc = datetime.now(timezone.utc)
 base_date = (now_utc + timedelta(hours=2)).replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -63,35 +61,42 @@ def download_model_from_neon(area_name):
 
 def get_future_prices(area_name, target_date):
     """
-    Bypasses the API's date filter completely. Grabs the newest 150 hours 
-    and lets Python perfectly slice out the exact 00:00 to 23:00 window.
+    Bypasses broken date filters. Uses the NEW API column 'TimeUTC'.
     """
     url = "https://api.energidataservice.dk/dataset/DayAheadPrices"
     params = {
-        "filter": json.dumps({"PriceArea": [area_name.upper()]}),
-        "sort": "HourUTC DESC",
-        "limit": 150
+        "sort": "TimeUTC DESC",  # NEW COLUMN NAME!
+        "limit": 200
     }
     
     try:
+        print(f"📡 Requesting recent prices for {area_name}...")
         res = requests.get(url, params=params, timeout=15)
         if res.status_code == 200:
             records = res.json().get('records', [])
             if not records: return None
             
             df = pd.DataFrame(records)
-            time_col = next((c for c in ['HourUTC', 'Minutes15UTC', 'ds'] if c in df.columns), None)
-            df['datetime_utc'] = pd.to_datetime(df[time_col], utc=True)
-            p_col = 'SpotPriceDKK' if 'SpotPriceDKK' in df.columns else 'DayAheadPriceDKK'
-            df['price_kwh'] = pd.to_numeric(df[p_col]) / 1000
             
-            # 🛡️ THE EXACT 24-HOUR FILTER
+            # Filter for specific region
+            df = df[df['PriceArea'] == area_name.upper()]
+            
+            # Use the new time column
+            df['datetime_utc'] = pd.to_datetime(df['TimeUTC'], utc=True)
+            df['price_kwh'] = pd.to_numeric(df['DayAheadPriceDKK']) / 1000
+            
+            # THE EXACT 24-HOUR FILTER
             end_date = target_date + timedelta(days=1)
             mask = (df['datetime_utc'] >= target_date) & (df['datetime_utc'] < end_date)
             df_filtered = df[mask]
             
-            if df_filtered.empty: return None
+            if df_filtered.empty: 
+                print(f"⚠️ Data downloaded, but {target_date.date()} is not available yet.")
+                return None
+                
             return df_filtered.set_index('datetime_utc').resample('h').mean(numeric_only=True)['price_kwh'].to_dict()
+        else:
+            print(f"❌ API HTTP Error: {res.status_code}")
     except Exception as e:
         print(f"❌ Price API Error: {e}")
     return None
@@ -104,7 +109,7 @@ def generate_full_day_forecast(area_name, engine, target_date):
     prices = get_future_prices(area_name, target_date)
     
     if not prices: 
-        print(f"⚠️ No prices found for {area_name} on {target_date.date()}. The API might not have released them yet.")
+        print(f"⚠️ Missing price data. Skipping {area_name}.")
         return None
 
     query = f"SELECT datetime_utc, co2_emissions_g_kwh, wind_speed, solar_radiation FROM processed_features WHERE price_area='{area_name.upper()}' AND is_forecast=FALSE ORDER BY datetime_utc DESC LIMIT 169"
@@ -114,12 +119,11 @@ def generate_full_day_forecast(area_name, engine, target_date):
     dk_holidays = holidays.Denmark()
 
     preds = []
-    # This loop runs exactly 24 times: 0 to 23
     for h in range(24):
         time_utc = pd.to_datetime(target_date.replace(hour=h), utc=True)
         
-        # If a specific hour is missing from the API, use the first available price to prevent crashes
-        p = prices.get(time_utc, list(prices.values())[0] if prices else 0)
+        # If an hour is missing from the API, use 0 to prevent crash
+        p = prices.get(time_utc, 0)
         
         feats = {
             'spot_price_dkk_kwh': p, 'wind_speed': last_weather['wind_speed'],
