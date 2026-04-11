@@ -14,6 +14,7 @@ psycopg2-binary
 # MLOps & Monitoring
 mlflow
 evidently
+xgboost
 optuna
 python-dotenv
 
