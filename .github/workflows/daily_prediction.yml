@@ -33,12 +33,17 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate Strategy & Export JSON
+      - name: Sanity Check Secret
         env:
-          # This forces the secret directly into Python's environment
-          DATABASE_URL: ${{ secrets.DATABASE_URL }} 
-        run: python run_forecast.py
-
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ THE SECRET IS EMPTY. GitHub is failing to load it."
+            exit 1
+          else
+            echo "✅ THE SECRET IS LOADED. Python should be able to see it."
+          fi
+          
       # --- THE PRESTIGE STEP: COMMIT & PUSH ---
       - name: Push Static API to GitHub
         run: |
