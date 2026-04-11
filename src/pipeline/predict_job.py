@@ -7,11 +7,13 @@ import numpy as np
 import holidays
 import requests
 from datetime import datetime, timedelta, timezone
-from src.database.connection import get_db_connection
-from sqlalchemy import text 
 
 # --- PATH FIX ---
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from src.database.connection import get_db_connection
+from sqlalchemy import text 
+
+
 
 # --- CONFIG ---
 # Target is tomorrow to ensure the Guardian stays ahead of the grid
