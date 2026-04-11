@@ -223,8 +223,11 @@ if date:
     def highlight_and_bold(row):
         cur_h = datetime.now().strftime('%H:00')
         if row['Time'] == cur_h:
-            return ['background-color: rgba(56, 189, 248, 0.08); font-weight: 900; color: #FFFFFF; border-bottom: 2px solid #38BDF8;'] * len(row)
-        return [''] * len(row)
+            # The Active "Seductive" Row: Deep cyan background with glowing cyan text
+            return ['background-color: rgba(0, 209, 255, 0.1); font-weight: 900; color: #00D1FF;'] * len(row)
+        
+        # The Base Rows: Transparent background with sleek slate-grey text
+        return ['background-color: transparent; color: #94A3B8; font-weight: 500;'] * len(row)
 
     st.dataframe(
         table_df.style.apply(highlight_and_bold, axis=1),
