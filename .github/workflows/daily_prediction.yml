@@ -44,20 +44,26 @@ jobs:
             echo "✅ THE SECRET IS LOADED. Python should be able to see it."
           fi
           
-      # --- THE PRESTIGE STEP: COMMIT & PUSH ---
       - name: Push Static API to GitHub
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/latest_forecast.json
-          # The '|| echo' part prevents the action from failing if the data randomly happens to be exactly the same
-          git commit -m "auto: sync daily forecast JSON for UI" || echo "No changes to commit"
-          git push
+          
+          # Safely check if the file was actually generated before trying to push
+          if [ -f docs/latest_forecast.json ]; then
+            git add docs/latest_forecast.json
+            git commit -m "auto: sync daily forecast JSON for UI" || echo "No changes to commit"
+            git push
+          else
+            echo "❌ FATAL: The JSON file was never created! Python must have failed."
+            exit 1
+          fi
 
       - name: Archive Forecast Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: forecast-logs-${{ github.run_id }}
-          path: artifacts/
+          # We changed this from 'artifacts/' to the actual docs folder so it stops giving you warnings!
+          path: docs/
           retention-days: 3
