@@ -1,19 +1,23 @@
+import sys
+import os
 import pandas as pd
+from sqlalchemy import text
 from src.database.connection import get_db_connection
 
+# --- PATH FIX ---
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 def get_dynamic_thresholds(engine, area, years_back=2):
-    """
-    Dynamically calculates Q1 (Best 25%) and Q3 (Worst 25%) 
-    for Price and CO2 over the specified historical period.
-    """
-    print(f"🧮 Calculating dynamic {years_back}-year statistical standards for {area}...")
+    """Calculates statistical benchmarks from the Silver Layer."""
     query = f"""
         SELECT spot_price_dkk_kwh, co2_emissions_g_kwh 
-        FROM historical_training_data 
-        WHERE price_area = '{area}' 
-        AND ds >= NOW() - INTERVAL '{years_back} YEARS'
+        FROM processed_features 
+        WHERE price_area = '{area}' AND is_forecast = FALSE
+        AND datetime_utc >= NOW() - INTERVAL '{years_back} YEARS'
     """
     df = pd.read_sql(query, engine)
+    if df.empty:
+        return {'q1_price': 0.5, 'q3_price': 2.0, 'q1_co2': 50, 'q3_co2': 150}
     
     return {
         'q1_price': df['spot_price_dkk_kwh'].quantile(0.33),
@@ -23,82 +27,59 @@ def get_dynamic_thresholds(engine, area, years_back=2):
     }
 
 def apply_regional_logic(row, thresholds_dk1, thresholds_dk2):
-    """
-    Evaluates the prediction against the living 2-year statistics.
-    🟢 BEST: Top 33% cleanest & cheapest | 🔴 AVOID: Worst 15% or Peak Hours.
-    """
-    area, hour = row['price_area'], row['forecast_time'].hour
-    price, co2 = row['spot_price_dkk_kwh'], row['predicted_co2']
+    """🟢 BEST | 🟡 CAUTION | 🔴 AVOID"""
+    area = row['price_area']
+    hour = pd.to_datetime(row['datetime_utc']).hour
+    price = row['predicted_price_dkk_kwh']
+    co2 = row['predicted_co2']
 
-    # Select the correct dynamic dictionary based on the row's area
     t = thresholds_dk1 if area == 'DK1' else thresholds_dk2
 
-    # Peak hour penalty (17:00 to 21:00 is universally bad for grid load)
     if (17 <= hour <= 21) or (price > t['q3_price']) or (co2 > t['q3_co2']): 
-        return "🔴 AVOID "
+        return "AVOID"
     elif (price < t['q1_price']) and (co2 < t['q1_co2']): 
-        return "🟢 BEST  "
+        return "BEST"
     else: 
-        return "🟡 CAUTION"
-
-def generate_manifesto(df):
-    """Generates the universal text manifesto based on the dynamic results."""
-    green_hours = len(df[df['status'].str.contains("🟢")])
-    
-    legend = (
-        "🟢 BEST: A gift from the wind and sun. Pure harmony for the planet.\n"
-        "🟡 CAUTION: The grid is stable, but your mindfulness is still needed.\n"
-        "🔴 AVOID: High tariffs or carbon. Protecting our neighbors and the elnet.\n\n"
-        "🟢 BEST: En gave fra vind og sol. Ren harmoni for vores planet.\n"
-        "🟡 CAUTION: Elnettet er stabilt, men din opmærksomhed er stadig vigtig.\n"
-        "🔴 AVOID: Høje tariffer eller CO2. Vi beskytter vores naboer og elnettet.\n"
-    )
-
-    if green_hours > 0:
-        en_strat = f"The grid offers {green_hours} hours of 'Best' energy today; let's use this wind-powered gift to heal our home."
-        da_strat = f"Elnettet tilbyder {green_hours} 'Best' timer i dag; lad os bruge denne vinddrevne gave til at passe på vores hjem."
-    else:
-        en_strat = "Today, the winds are quiet and the planet is resting. We choose patience over consumption, waiting for the green light to return."
-        da_strat = "I dag er vinden stille, og planeten hviler. Vi vælger tålmodighed frem for forbrug og venter på, at det grønne lys vender tilbage."
-
-    return f"{legend}\n---\nEN: {en_strat}\nDA: {da_strat}"
+        return "CAUTION"
 
 def run_recommendation_engine():
     engine = get_db_connection()
     
-    # 1. Fetch dynamic statistics for the last 2 years
-    dk1_thresholds = get_dynamic_thresholds(engine, 'DK1', years_back=2)
-    dk2_thresholds = get_dynamic_thresholds(engine, 'DK2', years_back=2)
+    # 1. Get Benchmarks
+    dk1_t = get_dynamic_thresholds(engine, 'DK1')
+    dk2_t = get_dynamic_thresholds(engine, 'DK2')
     
-    # 2. Fetch the 48 newest predictions
-    query = "SELECT * FROM forecast_results ORDER BY generated_at DESC LIMIT 48"
+    # 2. Get the latest forecasts (Gold Layer)
+    query = "SELECT * FROM ai_forecasts ORDER BY datetime_utc ASC"
     df = pd.read_sql(query, engine)
     
-    # 3. Apply the dynamic logic to the dataframe
-    df['forecast_time'] = pd.to_datetime(df['forecast_time'])
-    df['status'] = df.apply(lambda row: apply_regional_logic(row, dk1_thresholds, dk2_thresholds), axis=1)
-    df['Time'] = df['forecast_time'].dt.strftime('%H:%M')
+    if df.empty:
+        print("⚠️ No forecasts found.")
+        return
 
-    # --- PRINTING THE RESULTS ---
-    print("\n" + "🌍 " * 15)
-    print("      GRIDWISE: THE DATA-DRIVEN TRUTH")
-    print("🌍 " * 15)
+    # 3. Calculate Recommendations
+    df['recommendation_status'] = df.apply(lambda row: apply_regional_logic(row, dk1_t, dk2_t), axis=1)
 
-    for area in ['DK1', 'DK2']:
-        name = "Aalborg / Jutland" if area == 'DK1' else "Copenhagen / Zealand"
-        print(f"\n📊 {area} - {name}")
-        print("-" * 60)
-        print(f"{'TIME':<8} | {'PRICE':<9} | {'CO2':<8} | {'STATUS'}")
-        
-        area_df = df[df['price_area'] == area].sort_values('Time')
-        for _, r in area_df.iterrows():
-            print(f"{r['Time']:<8} | {r['spot_price_dkk_kwh']:>6.2f} kr | {r['predicted_co2']:>5.1f}g | {r['status']}")
+    # 4. 💾 UPSERT recommendations back to Neon
+    print("📤 Saving recommendations to Gold Layer...")
+    
+    # We use a temp table for the update
+    df[['datetime_utc', 'price_area', 'model_version', 'recommendation_status']].to_sql('temp_recs', engine, if_exists='replace', index=False)
+    
+    update_query = text("""
+        UPDATE ai_forecasts f
+        SET recommendation_status = t.recommendation_status
+        FROM temp_recs t
+        WHERE f.datetime_utc = t.datetime_utc 
+        AND f.price_area = t.price_area 
+        AND f.model_version = t.model_version;
+    """)
+    
+    with engine.begin() as conn:
+        conn.execute(update_query)
+        conn.execute(text("DROP TABLE IF EXISTS temp_recs;"))
 
-    print("\n" + "🌱 " * 15)
-    print("🌍 THE GUARDIAN'S WORD / VOGTERENS ORD")
-    print("🌱 " * 15)
-    print(generate_manifesto(df))
-    print("-" * 60)
+    print("✅ Recommendations synced. The 'Guardian' has spoken.")
 
 if __name__ == "__main__":
     run_recommendation_engine()

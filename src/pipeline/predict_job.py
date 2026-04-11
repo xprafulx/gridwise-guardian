@@ -1,103 +1,128 @@
 import sys
 import os
-# --- PATH FIX: Ensures it finds the 'src' folder from the root ---
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
+import io
 import joblib
 import pandas as pd
 import numpy as np
 import holidays
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from src.database.connection import get_db_connection
 from sqlalchemy import text 
 
-# --- DYNAMIC CONFIGURATION ---
-# Set days=0 for DEMO, days=1 for PRODUCTION automation
-# Change days=0 to days=1
-TARGET_DATE = (datetime.now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+# --- PATH FIX ---
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+# --- CONFIG ---
+# Snaps to the start of the current UTC day
+TARGET_DATE = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+MODEL_VERSION = "xgb_v1_baseline"
+
+def download_model_from_neon(area_name):
+    """
+    Retrieves the active model binary from Neon Model Registry.
+    This allows the script to run without local .pkl files.
+    """
+    engine = get_db_connection()
+    area_key = f"co2_{area_name.lower()}"
+    
+    print(f"📡 Downloading active model for {area_name} from Neon...")
+    
+    query = text("""
+        SELECT model_binary 
+        FROM model_registry 
+        WHERE model_name = :name AND is_active = TRUE
+        ORDER BY created_at DESC LIMIT 1
+    """)
+    
+    with engine.connect() as conn:
+        result = conn.execute(query, {"name": area_key}).fetchone()
+        
+    if not result:
+        print(f"❌ No active model found in Neon for {area_name}!")
+        return None, None
+
+    # Load the binary 'blob' into joblib via a buffer
+    model_bytes = result[0]
+    buffer = io.BytesIO(model_bytes)
+    payload = joblib.load(buffer)
+    
+    print(f"✅ Model {area_name} loaded successfully.")
+    return payload['model'], payload['features']
+
+def find_time_column(df):
+    """Safely finds a timestamp column regardless of API naming quirks."""
+    candidates = ['HourUTC', 'Minutes5UTC', 'HourDK', 'Minutes5DK', 'TimeDK', 'ds']
+    for col in candidates:
+        if col in df.columns: return col
+    return None
 
 def get_future_prices(area_name, date):
-    """Fetches Day-Ahead prices using 2026 standards (15-min resampled to 1-hour)."""
-    print(f"🌐 Fetching API prices for {area_name} on {date.date()}...")
-    
+    """Fetches Day-Ahead prices for the target date."""
     start_str = date.strftime('%Y-%m-%dT00:00')
     end_str = date.strftime('%Y-%m-%dT23:59')
-    
-    url = f"https://api.energidataservice.dk/dataset/DayAheadPrices?filter={{\"PriceArea\":[\"{area_name}\"]}}&start={start_str}&end={end_str}&sort=TimeDK ASC"
+    url = f"https://api.energidataservice.dk/dataset/DayAheadPrices?filter={{\"PriceArea\":[\"{area_name}\"]}}&start={start_str}&end={end_str}"
     
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             records = response.json().get('records', [])
-            if not records:
-                print(f"⚠️ No records found for {date.date()}. (Market results release at 13:00).")
-                return None
+            if not records: return None
             
             df = pd.DataFrame(records)
-            df['TimeDK'] = pd.to_datetime(df['TimeDK'])
-            df['DayAheadPriceDKK'] = pd.to_numeric(df['DayAheadPriceDKK'], errors='coerce')
+            time_col = find_time_column(df)
+            if not time_col: return None
             
-            df = df.set_index('TimeDK').resample('h').mean(numeric_only=True).reset_index()
-            df = df[df['TimeDK'].dt.date == date.date()]
+            df['datetime_utc'] = pd.to_datetime(df[time_col], utc=True)
+            price_col = 'SpotPriceDKK' if 'SpotPriceDKK' in df.columns else 'DayAheadPriceDKK'
+            df['price_kwh'] = pd.to_numeric(df[price_col], errors='coerce') / 1000
             
-            if len(df) < 24:
-                print(f"⚠️ Only {len(df)}/24 hourly slots found.")
-                return None
-            
-            return {r.TimeDK.hour: r.DayAheadPriceDKK/1000 for r in df.itertuples()}
+            return df.set_index('datetime_utc').resample('h').mean(numeric_only=True)['price_kwh'].to_dict()
     except Exception as e:
-        print(f"❌ API Error: {str(e)}")
+        print(f"❌ Price API Error: {e}")
     return None
-
-def get_season(month):
-    return (month % 12 // 3)
 
 def generate_full_day_forecast(area_name, engine, target_date):
     area_name = area_name.upper()
     
-    # --- UPDATED: LOADING FROM THE 'LATEST' VAULT ---
-    model_path = f"models/latest/{area_name.lower()}/model.pkl"
-    feat_path = f"models/latest/{area_name.lower()}/features.pkl"
+    # 📥 MLOps Fetch: Pull model from DB instead of local file
+    model, feature_names = download_model_from_neon(area_name)
     
-    if not os.path.exists(model_path):
-        print(f"❌ Error: No model found at {model_path}. Run train_job.py first!")
-        return None
+    if model is None: return None
 
-    model = joblib.load(model_path)
-    feature_names = joblib.load(feat_path)
     dk_holidays = holidays.Denmark()
-
-    # 1. Inject API Prices
     prices = get_future_prices(area_name, target_date)
     if not prices: return None
 
-    # 2. Fetch seed data for Lags (CO2 history)
+    # Pull history for Lag features from Silver Layer
     query = f"""
-        SELECT co2_emissions_g_kwh, wind_speed, solar_radiation 
-        FROM historical_training_data 
-        WHERE price_area = '{area_name}' 
-        AND ds < '{target_date.strftime('%Y-%m-%d %H:%M:%S')}'
-        ORDER BY ds DESC LIMIT 169
+        SELECT datetime_utc, co2_emissions_g_kwh, wind_speed, solar_radiation 
+        FROM processed_features 
+        WHERE price_area = '{area_name}' AND is_forecast = FALSE
+        ORDER BY datetime_utc DESC LIMIT 169
     """
     recent_data = pd.read_sql(query, engine)
+    recent_data['datetime_utc'] = pd.to_datetime(recent_data['datetime_utc'], utc=True)
     history = recent_data['co2_emissions_g_kwh'].tolist()[::-1]
     last_weather = recent_data.iloc[0]
 
     predictions = []
 
-    # 3. Forecasting Loop: 00:00 to 23:00
     for hour in range(24):
-        current_time = target_date.replace(hour=hour)
+        current_time = pd.to_datetime(target_date.replace(hour=hour))
         
+        # Safely get price
+        price_val = prices.get(current_time, 0)
+        if price_val == 0 and prices:
+            price_val = list(prices.values())[0]
+
         feats = {
-            'spot_price_dkk_kwh': prices[hour], 
+            'spot_price_dkk_kwh': price_val, 
             'wind_speed': last_weather['wind_speed'],
             'solar_radiation': last_weather['solar_radiation'],
             'hour': hour,
             'day_of_week': current_time.weekday(),
             'month': current_time.month,
-            'season': get_season(current_time.month),
             'hour_sin': np.sin(2 * np.pi * hour / 24),
             'hour_cos': np.cos(2 * np.pi * hour / 24),
             'is_holiday': 1 if current_time.date() in dk_holidays else 0,
@@ -112,50 +137,46 @@ def generate_full_day_forecast(area_name, engine, target_date):
         pred_co2 = model.predict(X)[0]
         
         predictions.append({
-            'forecast_time': current_time,
-            'predicted_co2': float(pred_co2),
-            'spot_price_dkk_kwh': prices[hour],
+            'datetime_utc': current_time,
             'price_area': area_name,
-            'generated_at': datetime.now()
+            'model_version': MODEL_VERSION,
+            'predicted_co2': float(pred_co2),
+            'predicted_price_dkk_kwh': feats['spot_price_dkk_kwh']
         })
         history.append(pred_co2)
 
-    return pd.DataFrame(predictions)
+    df_preds = pd.DataFrame(predictions)
+    # Smart logic: Set 'should_charge' for the 6 cleanest hours
+    threshold = df_preds['predicted_co2'].nsmallest(6).max()
+    df_preds['should_charge'] = df_preds['predicted_co2'] <= threshold
+    
+    return df_preds
 
 def run_job():
     engine = get_db_connection()
-    print(f"\n🚀 GRIDWISE MASTER PLAN FOR: {TARGET_DATE.date()}")
+    print(f"🚀 GENERATING SMART FORECASTS FOR: {TARGET_DATE.date()}")
     
-    dk1 = generate_full_day_forecast('DK1', engine, TARGET_DATE)
-    dk2 = generate_full_day_forecast('DK2', engine, TARGET_DATE)
-
-    if dk1 is not None and dk2 is not None:
-        for area_df, table_name in [(dk1, 'temp_dk1'), (dk2, 'temp_dk2')]:
-            area_df.to_sql(table_name, engine, if_exists='replace', index=False)
-            
+    for area in ['DK1', 'DK2']:
+        forecast_df = generate_full_day_forecast(area, engine, TARGET_DATE)
+        
+        if forecast_df is not None:
+            # Sync to Gold Layer
+            forecast_df.to_sql(f'temp_{area.lower()}', engine, if_exists='replace', index=False)
             upsert_query = text(f"""
-                INSERT INTO forecast_results (forecast_time, predicted_co2, spot_price_dkk_kwh, price_area, generated_at)
-                SELECT forecast_time, predicted_co2, spot_price_dkk_kwh, price_area, generated_at FROM {table_name}
-                ON CONFLICT (forecast_time, price_area) 
+                INSERT INTO ai_forecasts (datetime_utc, price_area, model_version, predicted_co2, predicted_price_dkk_kwh, should_charge)
+                SELECT datetime_utc, price_area, model_version, predicted_co2, predicted_price_dkk_kwh, should_charge 
+                FROM temp_{area.lower()}
+                ON CONFLICT (datetime_utc, price_area, model_version) 
                 DO UPDATE SET 
                     predicted_co2 = EXCLUDED.predicted_co2,
-                    spot_price_dkk_kwh = EXCLUDED.spot_price_dkk_kwh,
-                    generated_at = EXCLUDED.generated_at;
+                    predicted_price_dkk_kwh = EXCLUDED.predicted_price_dkk_kwh,
+                    should_charge = EXCLUDED.should_charge,
+                    prediction_timestamp = CURRENT_TIMESTAMP;
             """)
             with engine.begin() as conn:
                 conn.execute(upsert_query)
-                conn.execute(text(f"DROP TABLE IF EXISTS {table_name};"))
-
-        print("\n" + "="*65)
-        print(f"{'TIME':<5} | {'DK1 CO2':<10} | {'DK1 PRICE':<10} | {'DK2 CO2':<10} | {'DK2 PRICE'}")
-        print("-" * 65)
-        for i in range(24):
-            t = dk1.iloc[i]['forecast_time'].strftime('%H:%M')
-            c1, p1 = dk1.iloc[i]['predicted_co2'], dk1.iloc[i]['spot_price_dkk_kwh']
-            c2, p2 = dk2.iloc[i]['predicted_co2'], dk2.iloc[i]['spot_price_dkk_kwh']
-            print(f"{t:<5} | {c1:>7.1f}g | {p1:>8.2f}kr | {c2:>7.1f}g | {p2:>8.2f}kr")
-        print("="*65)
-        print("💾 Success! Predictions synced with latest models.")
+                conn.execute(text(f"DROP TABLE IF EXISTS temp_{area.lower()};"))
+            print(f"✅ {area} forecasts synced to Neon.")
 
 if __name__ == "__main__":
     run_job()

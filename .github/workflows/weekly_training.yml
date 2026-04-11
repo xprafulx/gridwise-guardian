@@ -1,34 +1,40 @@
-name: Weekly Model Retraining
+name: 03 Smart Training
 
 on:
   schedule:
-    - cron: '0 0 * * 0'  # Runs at 00:00 every Sunday
+    # 03:00 CEST = 01:00 UTC
+    # Fires every night to check if a retrain is needed!
+    - cron: '0 1 * * *'  
   workflow_dispatch:
 
 jobs:
-  retrain:
+  train:
     runs-on: ubuntu-latest
+    
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Training Pipeline
-        env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        run: python src/pipeline/train_job.py
+      - name: Evaluate & Potential Retrain
+        # This script checks: Is it Sunday? OR Is Drift > 0.3?
+        run: python -m src.pipeline.train_job
 
-      - name: Commit New Model Artifacts
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add models/
-          git commit -m "🤖 Automated Sunday Model Update [$(date +'%m%d%Y')]"
-          git push
+      - name: Archive Model Artifacts
+        # Only uploads if the models folder actually changed/exists
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-xgboost-model
+          path: models/
+          retention-days: 30

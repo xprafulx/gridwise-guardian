@@ -1,209 +1,232 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
+import streamlit.components.v1 as components
 from src.database.connection import get_db_connection
 from datetime import datetime
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(
-    page_title="Gridwise Guardian",
-    page_icon="🌍",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# --- 1. PATH FIX ---
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-# --- 1. DATA FETCHING: AVAILABLE DATES ---
-@st.cache_data(ttl=60)
-def get_available_dates(area):
-    engine = get_db_connection()
-    try:
-        query = f"""
-            SELECT DISTINCT DATE(forecast_time) as forecast_date 
-            FROM forecast_results 
-            WHERE price_area = '{area}' 
-            ORDER BY forecast_date DESC 
-            LIMIT 7
-        """
-        df = pd.read_sql(query, engine)
-        return df['forecast_date'].tolist()
-    except Exception as e:
-        st.error(f"Database Error: {e}")
-        return []
-
-# --- 2. DATA FETCHING: 2-YEAR DYNAMIC THRESHOLDS ---
-@st.cache_data(ttl=3600) # Cache this heavy calculation for 1 hour
-def get_dynamic_thresholds(area, years_back=2):
-    engine = get_db_connection()
-    try:
-        query = f"""
-            SELECT spot_price_dkk_kwh, co2_emissions_g_kwh 
-            FROM historical_training_data 
-            WHERE price_area = '{area}' 
-            AND ds >= NOW() - INTERVAL '{years_back} YEARS'
-        """
-        df = pd.read_sql(query, engine)
-        return {
-            'p33_price': df['spot_price_dkk_kwh'].quantile(0.33), 
-            'p83_price': df['spot_price_dkk_kwh'].quantile(0.83),   
-            'p33_co2': df['co2_emissions_g_kwh'].quantile(0.33),  
-            'p83_co2': df['co2_emissions_g_kwh'].quantile(0.83)     
+# --- 2. THE "TEMPTATION" UI STYLING ---
+def apply_addictive_ui():
+    st.markdown("""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Grotesk:wght@300;700&display=swap');
+        
+        /* THE ULTIMATE BACKGROUND: Deep Velvet & Neon Depth */
+        .stApp {
+            background: radial-gradient(circle at 50% -10%, #1A1F26 0%, #05070A 100%);
+            color: #F1F5F9;
+            font-family: 'Outfit', sans-serif;
         }
-    except Exception as e:
-        st.error(f"Stats Error: {e}")
-        return None
 
-# --- 3. DATA FETCHING: TIMELINE DATA ---
-@st.cache_data(ttl=60) 
-def load_forecast_data(area, target_date):
-    engine = get_db_connection()
-    thresholds = get_dynamic_thresholds(area)
+        /* TEXT THAT GLOWS */
+        h1, h2, h3 {
+            font-family: 'Space Grotesk', sans-serif !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.05em !important;
+            color: #FFFFFF !important;
+            text-shadow: 0 0 20px rgba(255,255,255,0.1);
+        }
+        
+        /* KPI CARD: Sleek, Dark, and Sharp */
+        .kpi-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 35px 25px;
+            border-radius: 24px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .kpi-card:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+            transform: scale(1.02);
+        }
+        .kpi-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 15px; }
+        .kpi-value { font-size: 2.8rem; font-weight: 900; color: #F8FAFC; line-height: 1; }
+        .kpi-sub { font-size: 0.9rem; margin-top: 10px; font-weight: 500; letter-spacing: 0.05em; }
+
+        /* SIDEBAR */
+        section[data-testid="stSidebar"] {
+            background-color: #05070A !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.02);
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+# --- 3. TICKER LOGIC (Next Action Calculation) ---
+def get_ticker_logic(df):
+    now = datetime.now()
+    h = now.hour
+    if df.empty or h >= len(df): 
+        return "SYNCING PULSE...", "#475569"
     
-    try:
-        query = f"""
-            SELECT forecast_time, predicted_co2, spot_price_dkk_kwh, generated_at
-            FROM forecast_results
-            WHERE price_area = '{area}' 
-            AND DATE(forecast_time) = '{target_date}'
-            ORDER BY forecast_time ASC
-        """
-        df = pd.read_sql(query, engine)
+    status = df.iloc[h]['recommendation_status']
+    duration = 0
+    # Count consecutive hours of same status
+    for i in range(h, len(df)):
+        if df.iloc[i]['recommendation_status'] == status:
+            duration += 1
+        else:
+            break
+            
+    color_map = {'BEST': '#10B981', 'CAUTION': '#F59E0B', 'AVOID': '#EF4444'}
+    msg_map = {
+        'BEST': f"🟢 SAFE TO CHARGE FOR {duration}H",
+        'AVOID': f"🔴 HALT USAGE FOR {duration}H",
+        'CAUTION': f"🟡 LIMIT LOAD FOR {duration}H"
+    }
+    return msg_map.get(status, "GRID SHIFTING..."), color_map.get(status, "#fff")
+
+# --- 4. THE LIVE TICKING CLOCK WITH SECOND HAND & TICKER ---
+def render_sidebar_clock(df):
+    now = datetime.now()
+    hour_colors = df['bar_color'].tolist()
+    current_color = hour_colors[now.hour] if now.hour < len(hour_colors) else "#444"
+    current_status = df['recommendation_status'].iloc[now.hour] if now.hour < len(df) else "SYNCING"
+    
+    # Get the seductive ticker message
+    ticker_text, ticker_color = get_ticker_logic(df)
+
+    clock_html = f"""
+    <div style="display:flex; flex-direction:column; align-items:center; font-family:'Space Grotesk';">
+        <svg width="170" height="170" viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="95" stroke="rgba(255,255,255,0.02)" stroke-width="1" fill="none" />
+            <circle cx="100" cy="100" r="12" fill="{current_color}" style="filter:blur(10px); opacity:0.5;">
+                <animate attributeName="opacity" values="0.2;0.6;0.2" dur="3s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="100" cy="100" r="5" fill="{current_color}" />
+            <g id="marks"></g>
+            <line id="h" x1="100" y1="100" x2="100" y2="65" stroke="#fff" stroke-width="5" stroke-linecap="round" />
+            <line id="m" x1="100" y1="100" x2="100" y2="45" stroke="#38BDF8" stroke-width="3" stroke-linecap="round" />
+            <line id="s" x1="100" y1="100" x2="100" y2="35" stroke="#F43F5E" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
         
-        if not df.empty and thresholds:
-            df = df.sort_values('generated_at').drop_duplicates(subset=['forecast_time'], keep='last')
-            df = df.sort_values('forecast_time') 
-            
-            df['forecast_time'] = pd.to_datetime(df['forecast_time'])
-            df['hour_display'] = df['forecast_time'].dt.strftime('%H:00')
-            
-            # --- APPLY UNIFIED 2-YEAR LOGIC FOR UI COLORS ---
-            def apply_logic(row):
-                price = row['spot_price_dkk_kwh']
-                co2 = row['predicted_co2']
-                hour = row['forecast_time'].hour
-                
-                # Red Zone (Worst 17% or Peak Hours)
-                if (17 <= hour <= 21) or (price > thresholds['p83_price']) or (co2 > thresholds['p83_co2']):
-                    return pd.Series(['rgba(231, 76, 60, 0.8)', 'rgba(231, 76, 60, 0.2)', '🔴 AVOID'])
-                # Green Zone (Best 33%)
-                elif (price <= thresholds['p33_price']) and (co2 <= thresholds['p33_co2']):
-                    return pd.Series(['rgba(46, 204, 113, 0.8)', 'rgba(46, 204, 113, 0.2)', '🟢 BEST'])
-                # Yellow Zone
-                else:
-                    return pd.Series(['rgba(241, 196, 15, 0.8)', 'rgba(241, 196, 15, 0.2)', '🟡 CAUTION'])
-            
-            # Assign Chart Color, Table Background, and Text Status
-            df[['chart_color', 'table_color', 'status']] = df.apply(apply_logic, axis=1)
-            
-            # Keep a relative score just to pick the #1 best/worst hour for the Top KPI boxes
-            df['Danger Score'] = (df['spot_price_dkk_kwh'] / df['spot_price_dkk_kwh'].max()) + \
-                                 (df['predicted_co2'] / df['predicted_co2'].max())
-            
-        return df
-    except Exception as e:
-        st.error(f"Database Error: {e}")
-        return pd.DataFrame()
+        <div style="margin-top:25px; text-align:center; width:100%;">
+            <div style="color:{current_color}; font-weight:700; font-size:10px; letter-spacing:4px; text-transform:uppercase; margin-bottom:8px; opacity:0.8;">{current_status} NOW</div>
+            <div style="color:{ticker_color}; font-weight:700; font-size:12px; letter-spacing:1px; text-shadow: 0 0 15px {ticker_color}66; animation: pulse 2s infinite;">
+                {ticker_text}
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes pulse {{
+            0% {{ opacity: 0.7; }}
+            50% {{ opacity: 1; }}
+            100% {{ opacity: 0.7; }}
+        }}
+    </style>
+    <script>
+        const colors = {str(hour_colors)};
+        const g = document.getElementById('marks');
+        for (let i=0; i<12; i++) {{
+            const a = (i*30)*(Math.PI/180);
+            const x = 100+84*Math.sin(a); const y = 100-84*Math.cos(a);
+            const h = new Date().getHours();
+            const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+            c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","3.5");
+            c.setAttribute("fill", colors[h >= 12 ? i+12 : i] || '#111'); g.appendChild(c);
+        }}
+        function tick() {{
+            const d = new Date();
+            const hAngle = (d.getHours()%12)*30 + d.getMinutes()*0.5;
+            const mAngle = d.getMinutes()*6;
+            const sAngle = d.getSeconds()*6;
+            document.getElementById('h').setAttribute('transform',`rotate(${{hAngle}},100,100)`);
+            document.getElementById('m').setAttribute('transform',`rotate(${{mAngle}},100,100)`);
+            document.getElementById('s').setAttribute('transform',`rotate(${{sAngle}},100,100)`);
+        }}
+        setInterval(tick,1000); tick();
+    </script>
+    """
+    with st.sidebar:
+        components.html(clock_html, height=290)
 
-# --- SIDEBAR ---
-st.sidebar.image("https://img.icons8.com/fluency/96/000000/green-earth.png", width=80)
-st.sidebar.title("Gridwise Guardian")
-st.sidebar.markdown("Predictive AI for the Danish Power Grid.")
+# --- 5. DATA FETCHING ---
+@st.cache_data(ttl=60)
+def get_dashboard_data(area, date):
+    engine = get_db_connection()
+    df = pd.read_sql(f"SELECT datetime_utc, predicted_co2, predicted_price_dkk_kwh as price, recommendation_status FROM ai_forecasts WHERE price_area = '{area}' AND DATE(datetime_utc) = '{date}' ORDER BY datetime_utc ASC", engine)
+    if not df.empty:
+        df['Time'] = pd.to_datetime(df['datetime_utc']).dt.strftime('%H:00')
+        c_map = {'BEST': '#10B981', 'CAUTION': '#F59E0B', 'AVOID': '#EF4444'}
+        df['bar_color'] = df['recommendation_status'].map(c_map)
+    return df
 
-selected_area = st.sidebar.radio("Select Price Area:", ("DK1 (Jutland/Funen)", "DK2 (Zealand/Cph)"))
-area_code = selected_area[:3]
+@st.cache_data(ttl=60)
+def get_dates(area):
+    engine = get_db_connection()
+    return pd.read_sql(f"SELECT DISTINCT DATE(datetime_utc) as d FROM ai_forecasts WHERE price_area='{area}' ORDER BY d DESC LIMIT 14", engine)['d'].tolist()
 
-available_dates = get_available_dates(area_code)
-if available_dates:
-    selected_date = st.sidebar.selectbox("📅 Select Date to View:", available_dates)
-else:
-    selected_date = None
+# --- APP LAYOUT ---
+st.set_page_config(page_title="Guardian", layout="wide")
+apply_addictive_ui()
 
-# --- MAIN DASHBOARD ---
-if not selected_date:
-    st.warning(f"No database records found for {area_code}.")
-else:
-    df = load_forecast_data(area_code, selected_date)
+# Sidebar
+st.sidebar.title("GRIDWISE")
+area = st.sidebar.selectbox("Region", ["DK1", "DK2"])
+dates = get_dates(area)
+date = st.sidebar.selectbox("Timeline", dates) if dates else None
 
-    if df.empty:
-        st.warning("No data available for this date.")
-    else:
-        st.title(f"⚡ Grid Forecast: {area_code} ({selected_date})")
-        
-        # --- 1. THE GUARDIAN's MANIFESTO (KPIs) ---
-        st.markdown("### 🎯 The Guardian's Manifesto")
-        
-        best_row = df.loc[df['Danger Score'].idxmin()]
-        worst_row = df.loc[df['Danger Score'].idxmax()]
-        avg_price = df['spot_price_dkk_kwh'].mean()
+if date:
+    df = get_dashboard_data(area, date)
+    render_sidebar_clock(df)
 
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.success(f"**🟢 Optimal Usage Window**\n\n# {best_row['hour_display']}\n"
-                       f"Price: {best_row['spot_price_dkk_kwh']:.2f} kr | CO2: {best_row['predicted_co2']:.0f}g")
-        with col2:
-            st.error(f"**🔴 Absolute Danger Zone**\n\n# {worst_row['hour_display']}\n"
-                     f"Price: {worst_row['spot_price_dkk_kwh']:.2f} kr | CO2: {worst_row['predicted_co2']:.0f}g")
-        with col3:
-            st.info(f"**📊 Daily Average Price**\n\n# {avg_price:.2f} kr\n"
-                    f"Generated at: {pd.to_datetime(df['generated_at'].iloc[0]).strftime('%H:%M')}")
+    st.title(f"{area} Strategy | {date}")
 
-        st.divider()
+    # --- KPI CARDS ---
+    best = df.loc[df['predicted_co2'].idxmin()]
+    worst = df.loc[df['predicted_co2'].idxmax()]
+    mean_co2 = df['predicted_co2'].mean()
 
-        # --- 2. THE INTERACTIVE FORECAST CHART ---
-        st.markdown("### 📉 24-Hour Timeline")
-        
-        fig = go.Figure()
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Optimal Point</div><div class="kpi-value">{best["Time"]}</div><div class="kpi-sub" style="color:#10B981">{best["predicted_co2"]:.0f}g CO2</div></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Peak Stress</div><div class="kpi-value">{worst["Time"]}</div><div class="kpi-sub" style="color:#EF4444">{worst["predicted_co2"]:.0f}g CO2</div></div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Grid Mean</div><div class="kpi-value">{mean_co2:.1f}g</div><div class="kpi-sub" style="color:#38BDF8">Intensity Baseline</div></div>', unsafe_allow_html=True)
 
-        # Add Price as TRAFFIC LIGHT colored bars
-        fig.add_trace(go.Bar(
-            x=df['hour_display'], 
-            y=df['spot_price_dkk_kwh'],
-            name='Price/Score Status',
-            marker_color=df['chart_color'], 
-            yaxis='y1'
-        ))
+    # --- CHART ---
+    st.markdown("### Forecast Overview")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df['Time'], y=df['price'], marker_color=df['bar_color'], opacity=0.4))
+    fig.add_trace(go.Scatter(x=df['Time'], y=df['predicted_co2'], mode='lines', line=dict(color='#38BDF8', width=4, shape='spline'), yaxis='y2'))
+    
+    cur_h = datetime.now().strftime('%H:00')
+    if cur_h in df['Time'].values:
+        fig.add_vline(x=cur_h, line_width=2, line_dash="dot", line_color="rgba(255,255,255,0.4)")
 
-        # Add CO2 as a blue line
-        fig.add_trace(go.Scatter(
-            x=df['hour_display'], 
-            y=df['predicted_co2'],
-            name='CO2 (g/kWh)',
-            mode='lines+markers',
-            line=dict(color='#3498db', width=3),
-            yaxis='y2'
-        ))
+    fig.update_layout(
+        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        yaxis=dict(showgrid=False, title=None), yaxis2=dict(overlaying='y', side='right', showgrid=False),
+        margin=dict(l=0, r=0, t=0, b=0), height=380, showlegend=False
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-        fig.update_layout(
-            xaxis=dict(title='Hour of Day'),
-            yaxis=dict(title='Price (DKK/kWh)'),
-            yaxis2=dict(title='CO2 Emissions (g/kWh)', titlefont=dict(color='#3498db'), tickfont=dict(color='#3498db'),
-                        anchor='x', overlaying='y', side='right'),
-            legend=dict(x=0.01, y=0.99, bgcolor='rgba(255,255,255,0)'),
-            margin=dict(l=0, r=0, t=30, b=0),
-            height=400
-        )
+    # --- 5. THE BOLD BOLD HIGHLIGHT TABLE ---
+    st.markdown("### Hourly Breakdown")
+    
+    table_df = pd.DataFrame({
+        "Time": df['Time'],
+        "Price": df['price'].round(3),
+        "CO2 (g)": df['predicted_co2'].round(1),
+        "Status": df['recommendation_status'].map({'BEST': '🟢 BEST', 'CAUTION': '🟡 CAUTION', 'AVOID': '🔴 AVOID'})
+    })
 
-        st.plotly_chart(fig, use_container_width=True)
+    def highlight_and_bold(row):
+        cur_h = datetime.now().strftime('%H:00')
+        if row['Time'] == cur_h:
+            return ['background-color: rgba(56, 189, 248, 0.08); font-weight: 900; color: #FFFFFF; border-bottom: 2px solid #38BDF8;'] * len(row)
+        return [''] * len(row)
 
-        # --- 3. THE RAW DATA (Color-Coded Table) ---
-        with st.expander("🔍 View Raw Database Output"):
-            
-            # Create the display table WITHOUT the color column
-            display_df = df[['hour_display', 'spot_price_dkk_kwh', 'predicted_co2', 'status']].copy()
-            display_df.rename(columns={'hour_display': 'Time', 'spot_price_dkk_kwh': 'Price (DKK)', 'predicted_co2': 'CO2 (g/kWh)', 'status': 'Grid Status'}, inplace=True)
-            
-            # The painter function secretly looks at the original 'df' for the color!
-            def color_table_rows(row):
-                color = df.loc[row.name, 'table_color']
-                return [f'background-color: {color}'] * len(row)
-            
-            styled_df = display_df.style.apply(color_table_rows, axis=1).format({
-                'Price (DKK)': "{:.2f}",
-                'CO2 (g/kWh)': "{:.0f}"
-            })
-            
-            st.dataframe(styled_df, use_container_width=True)
+    st.dataframe(
+        table_df.style.apply(highlight_and_bold, axis=1),
+        use_container_width=True, hide_index=True
+    )

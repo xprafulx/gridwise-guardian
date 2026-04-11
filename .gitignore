@@ -1,4 +1,4 @@
-# Python junk
+# Python artifacts
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
@@ -8,9 +8,11 @@ venv/
 .venv/
 env/
 
-# Sensitive data
+# Local Secrets & Data
 .env
-config.json
+.streamlit/secrets.toml
+artifacts/
+models/
 
 # OS files
 .DS_Store

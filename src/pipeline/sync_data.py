@@ -3,34 +3,55 @@ from sqlalchemy import text
 from src.database.connection import get_db_connection
 
 def sync_huggingface_to_postgres():
-    # 1. The Raw URL from your Hugging Face repo
+    # 1. The Raw URL from Hugging Face
     hf_url = "https://huggingface.co/datasets/appleballcay/denmark-grid-co2-2021-2026/raw/main/final_master_dataset.csv"
     
     print(f"📥 Downloading master dataset from Hugging Face...")
     try:
-        # Read directly from the URL into a DataFrame
         df = pd.read_csv(hf_url)
         
-        # Ensure the time column is in the correct datetime format for Postgres
-        df['ds'] = pd.to_datetime(df['ds'])
+        # --- FIX 1: Align columns with your Medallion Schema ---
+        # Map 'ds' to 'datetime_utc' and ensure UTC timezone awareness
+        df = df.rename(columns={'ds': 'datetime_utc'})
+        df['datetime_utc'] = pd.to_datetime(df['datetime_utc'], utc=True)
         
-        print(f"✅ Successfully downloaded {len(df)} rows.")
+        # Add the MLOps flag (Historical data is not a forecast)
+        df['is_forecast'] = False
         
-        # 2. Connect to your local PostgreSQL
-        print("🚀 Connecting to database...")
+        print(f"✅ Downloaded {len(df)} rows. Standardizing for Neon...")
+
+        # 2. Connect to Neon
         engine = get_db_connection()
         
-        # 3. Push to the historical_training_data table
-        # We use 'replace' to ensure the table matches your clean master file perfectly
-        print("📤 Pushing data to 'historical_training_data' table...")
-        df.to_sql('historical_training_data', engine, if_exists='replace', index=False)
+        # --- FIX 2: Use the 'Temp Table' Strategy to preserve Schema ---
+        # We push to a temporary table first
+        df.to_sql('temp_master_import', engine, if_exists='replace', index=False)
         
-        # 4. Final verification
+        # Now we move data into the official table using a proper SQL UPSERT
+        # This keeps our PRIMARY KEY (datetime_utc, price_area) and TIMESTAMPTZ intact
+        upsert_query = text("""
+            INSERT INTO processed_features (
+                datetime_utc, price_area, co2_emissions_g_kwh, 
+                spot_price_dkk_kwh, wind_speed, solar_radiation, is_forecast
+            )
+            SELECT 
+                datetime_utc, price_area, co2_emissions_g_kwh, 
+                spot_price_dkk_kwh, wind_speed, solar_radiation, is_forecast 
+            FROM temp_master_import
+            ON CONFLICT (datetime_utc, price_area) DO NOTHING;
+        """)
+        
+        print("📤 Syncing to 'processed_features' (Silver Layer)...")
+        with engine.begin() as conn:
+            conn.execute(upsert_query)
+            conn.execute(text("DROP TABLE IF EXISTS temp_master_import;"))
+        
+        # 3. Final verification
         with engine.connect() as conn:
-            result = conn.execute(text("SELECT COUNT(*) FROM historical_training_data"))
+            result = conn.execute(text("SELECT COUNT(*) FROM processed_features"))
             count = result.scalar()
             
-        print(f"🎉 SUCCESS! Database now contains {count} rows of clean grid data.")
+        print(f"🎉 SUCCESS! Neon now contains {count} rows of clean, historical grid data.")
         
     except Exception as e:
         print(f"❌ Error during sync: {e}")

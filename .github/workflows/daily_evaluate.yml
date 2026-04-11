@@ -1,16 +1,16 @@
-name: 01 Daily Ingestion
+name: 02 Model Evaluation
 
 on:
   schedule:
-    # 01:00 CEST (23:00 UTC) - Syncing yesterday's 'Truth'
-    - cron: '0 23 * * *'
-  workflow_dispatch: # Manual trigger for your exam or testing
+    # 02:00 CEST = 00:00 UTC
+    # Runs right after Ingestion to score the model's performance.
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
-  ingest:
+  evaluate:
     runs-on: ubuntu-latest
     
-    # WE CALL THE DATABASE HERE
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     
@@ -27,14 +27,14 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Execute Ingestion Job
-        # Running as a module ensures internal 'src' imports are seductive and smooth
-        run: python -m src.pipeline.ingest_job
+      - name: Execute Evaluation Job
+        # Calculates RMSE, MAE, and Drift (Evidently Score)
+        run: python -m src.pipeline.evaluate_job
 
-      - name: Archive Run Logs
+      - name: Archive Performance Metrics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ingest-logs-${{ github.run_id }}
+          name: model-performance-metrics
           path: artifacts/
-          retention-days: 3
+          retention-days: 14
