@@ -34,15 +34,17 @@ def find_time_column(df):
 def ingest_job():
     engine = get_db_connection()
 
-    # --- TIME LOCK (Modern UTC) ---
-    now = datetime.now(timezone.utc) 
+   # --- TIME LOCK (Strict Yesterday Boundary) ---
+    now = datetime.now(timezone.utc)
 
-    # Fetch from 3 days ago until RIGHT NOW
-    start_date = (now - timedelta(days=3)).strftime('%Y-%m-%dT%H:%M')
-    # Removing the hard 23:59 limit and using the actual current time
-    end_date = now.strftime('%Y-%m-%dT%H:%M') 
-
-    print(f"📥 Automated Sync: Fetching records from {start_date} to {end_date}...")
+    # 1. Start from 3 days ago at 00:00
+    start_date = (now - timedelta(days=3)).replace(hour=0, minute=0).strftime('%Y-%m-%dT%H:%M')
+    
+    # 2. End strictly at Yesterday 23:00 UTC
+    # This gives you exactly what you asked for: April 10, 23:00.
+    end_date = (now - timedelta(days=1)).replace(hour=23, minute=0).strftime('%Y-%m-%dT%H:%M')
+    
+    print(f"📥 Automated Sync: Fetching CLEAN records from {start_date} to {end_date}...")
     
     try:
         # --- 1. FETCH CO2 ---
