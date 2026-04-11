@@ -37,7 +37,7 @@ def export_static_api():
 
     # 2. Fetch the fresh forecast that Step 1 & 2 just generated
     forecast_query = """
-        SELECT datetime_utc, predicted_price_dkk_kwh, predicted_co2, price_area 
+        SELECT datetime_utc, market_price_dkk_kwh, predicted_co2, price_area 
         FROM ai_forecasts 
         WHERE DATE(datetime_utc) >= CURRENT_DATE
         ORDER BY datetime_utc ASC
@@ -49,7 +49,7 @@ def export_static_api():
     for _, row in forecast_df.iterrows():
         forecast_list.append({
             "time": pd.to_datetime(row['datetime_utc']).strftime('%H:00'),
-            "price": round(float(row['predicted_price_dkk_kwh']), 3),
+            "price": round(float(row['market_price_dkk_kwh']), 3),
             "co2": round(float(row['predicted_co2']), 1),
             "region": row['price_area']
         })
