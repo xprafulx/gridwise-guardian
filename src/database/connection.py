@@ -9,17 +9,20 @@ def get_db_connection():
     """
     Creates a SQLAlchemy connection engine to the Neon PostgreSQL database.
     """
-    user = os.getenv("POSTGRES_USER")
-    password = os.getenv("POSTGRES_PASSWORD")
-    host = os.getenv("POSTGRES_HOST")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    db = os.getenv("POSTGRES_DB")
-
-    # Neon requires ?sslmode=require for secure cloud connections
-    connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db}?sslmode=require"
+    # 1. Grab the master string from GitHub Secrets (or local .env)
+    db_url = os.environ.get("DATABASE_URL")
     
-    # Create the engine with a pool_pre_ping to keep connections healthy
-    engine = create_engine(connection_string, pool_pre_ping=True)
+    # 2. Hard stop if it's missing
+    if not db_url:
+        raise ValueError("❌ DATABASE_URL is completely missing from the environment!")
+        
+    # 3. SQLAlchemy strict formatting fix 
+    # (Sometimes Neon gives 'postgres://' but SQLAlchemy demands 'postgresql://')
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+        
+    # 4. Create the engine with a pool_pre_ping to keep connections healthy
+    engine = create_engine(db_url, pool_pre_ping=True)
     return engine
 
 if __name__ == "__main__":
