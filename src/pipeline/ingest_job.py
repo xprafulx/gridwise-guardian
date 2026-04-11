@@ -33,14 +33,17 @@ def find_time_column(df):
 
 def ingest_job():
     engine = get_db_connection()
-    
+
     # --- TIME LOCK (Modern UTC) ---
     now = datetime.now(timezone.utc) 
-    start_date = (now - timedelta(days=3)).strftime('%Y-%m-%dT%H:%M')
-    end_date = (now - timedelta(days=1)).strftime('%Y-%m-%dT23:59')
-    
-    print(f"📥 Automated Sync: Fetching records from {start_date} to {end_date}...")
 
+    # Fetch from 3 days ago until RIGHT NOW
+    start_date = (now - timedelta(days=3)).strftime('%Y-%m-%dT%H:%M')
+    # Removing the hard 23:59 limit and using the actual current time
+    end_date = now.strftime('%Y-%m-%dT%H:%M') 
+
+    print(f"📥 Automated Sync: Fetching records from {start_date} to {end_date}...")
+    
     try:
         # --- 1. FETCH CO2 ---
         co2_res = requests.get("https://api.energidataservice.dk/dataset/CO2Emis", 
