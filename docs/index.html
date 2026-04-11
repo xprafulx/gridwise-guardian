@@ -3,309 +3,279 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guardian Command Center</title>
+    <title>Guardian Docs & Incidents</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Grotesk:wght@300;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
     <style>
-        /* STREAMLIT DARK THEME COLORS */
-        :root {
-            --bg-main: #0E1117;
-            --bg-sidebar: #262730;
-            --card-bg: #1A1C24;
-            --text-primary: #FAFAFA;
-            --text-secondary: #9E9E9E;
-            --border-color: rgba(250, 250, 250, 0.1);
-            --accent-blue: #38BDF8;
-            --accent-green: #10B981;
-            --accent-red: #EF4444;
-            --accent-yellow: #F59E0B;
-        }
-
+        /* --- EXACT CSS FROM YOUR PYTHON SCRIPT --- */
+        
         body, html {
             margin: 0; padding: 0; height: 100%;
-            background-color: var(--bg-main);
-            color: var(--text-primary);
+            /* THE ULTIMATE BACKGROUND: Deep Velvet & Neon Depth */
+            background: radial-gradient(circle at 50% -10%, #1A1F26 0%, #05070A 100%);
+            color: #F1F5F9;
             font-family: 'Outfit', sans-serif;
             display: flex;
             overflow: hidden;
         }
 
+        /* TEXT THAT GLOWS */
+        h1, h2, h3 {
+            font-family: 'Space Grotesk', sans-serif !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.05em !important;
+            color: #FFFFFF !important;
+            text-shadow: 0 0 20px rgba(255,255,255,0.1);
+            margin-top: 0;
+        }
+
         /* CUSTOM SCROLLBAR */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
 
-        /* SIDEBAR (Matching Streamlit Width and Color) */
+        /* SIDEBAR */
         aside {
-            width: 300px;
-            background-color: var(--bg-main);
-            border-right: 1px solid var(--border-color);
+            width: 320px;
+            background-color: #05070A !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.02);
             display: flex;
             flex-direction: column;
             padding: 40px 20px;
             box-sizing: border-box;
         }
 
-        .brand-title {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 16px;
-            letter-spacing: 1px;
-            color: var(--text-primary);
-            font-weight: 700;
-            margin-bottom: 40px;
+        .sidebar-title {
+            font-size: 24px;
+            margin-bottom: 30px;
         }
 
-        /* MAIN CONTENT AREA */
+        /* MAIN CONTENT */
         main {
             flex-grow: 1;
             padding: 40px 60px;
             overflow-y: auto;
         }
 
-        h1, h2, h3 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-weight: 700;
-            margin-top: 0;
-            color: var(--text-primary);
-        }
-
-        h1 { font-size: 28px; margin-bottom: 30px; letter-spacing: -0.5px; }
-        h3 { font-size: 18px; margin-bottom: 20px; margin-top: 40px;}
-
-        /* KPI CARDS (Sleek and flat, like Streamlit) */
+        /* KPI CARD: Sleek, Dark, and Sharp */
         .kpi-container {
             display: flex;
             gap: 20px;
             margin-bottom: 40px;
+            margin-top: 20px;
         }
 
         .kpi-card {
             flex: 1;
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            padding: 25px 20px;
-            border-radius: 8px;
+            background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 35px 25px;
+            border-radius: 24px;
             text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .kpi-label { 
-            font-size: 11px; 
-            color: var(--text-secondary); 
-            text-transform: uppercase; 
-            letter-spacing: 1px; 
-            margin-bottom: 10px;
+        .kpi-card:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+            transform: scale(1.02);
         }
 
-        .kpi-value { 
-            font-size: 32px; 
-            font-weight: 700; 
-            font-family: 'Space Grotesk', sans-serif;
-            margin-bottom: 5px;
-        }
+        .kpi-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 15px; }
+        .kpi-value { font-size: 2.8rem; font-weight: 900; color: #F8FAFC; line-height: 1; font-family: 'Space Grotesk'; }
+        .kpi-sub { font-size: 0.9rem; margin-top: 10px; font-weight: 500; letter-spacing: 0.05em; }
 
-        .kpi-sub { font-size: 12px; font-weight: 500; }
-
-        /* INCIDENT TABLE (Mimicking Streamlit DataFrame) */
+        /* THE BOLD HIGHLIGHT TABLE */
         table {
             width: 100%;
             border-collapse: collapse;
             font-family: 'Outfit', sans-serif;
             font-size: 14px;
+            margin-top: 20px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            overflow: hidden;
         }
 
         th { 
             text-align: left; 
-            color: var(--text-secondary); 
+            color: #475569; 
             font-size: 12px; 
-            font-weight: 500;
             padding: 12px 15px; 
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
         td { 
             padding: 12px 15px; 
-            border-bottom: 1px solid rgba(255,255,255,0.05); 
-            color: var(--text-primary);
+            border-bottom: 1px solid rgba(255,255,255,0.02); 
         }
 
-        /* Hover effect on rows just like Streamlit */
-        tbody tr:hover {
-            background-color: rgba(255, 255, 255, 0.03);
-        }
-
+        /* Exact Streamlit highlight style from your code */
         .highlight-row {
-            background-color: rgba(56, 189, 248, 0.1);
+            background-color: rgba(56, 189, 248, 0.08); 
+            font-weight: 900; 
+            color: #FFFFFF; 
+            border-bottom: 2px solid #38BDF8;
         }
 
-        /* SVG CLOCK CONTAINER */
+        /* TICKING CLOCK CONTAINER */
         .clock-container {
             display: flex;
             flex-direction: column;
             align-items: center;
+            font-family: 'Space Grotesk';
             margin-top: 20px;
         }
 
-        .ticker-text {
-            margin-top: 25px;
-            text-align: center;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            color: var(--accent-yellow);
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
         }
     </style>
 </head>
 <body>
 
     <aside>
-        <div class="brand-title">GRIDWISE</div>
+        <h2 class="sidebar-title">GRIDWISE</h2>
+        <div style="font-size: 12px; color: #475569; margin-bottom: 5px;">Region</div>
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 20px; color: #fff;">DK2</div>
         
         <div class="clock-container">
-            <svg width="150" height="150" viewBox="0 0 200 200">
-                <circle cx="100" cy="100" r="95" stroke="rgba(255,255,255,0.1)" stroke-width="1" fill="none" />
+            <svg width="170" height="170" viewBox="0 0 200 200">
+                <circle cx="100" cy="100" r="95" stroke="rgba(255,255,255,0.02)" stroke-width="1" fill="none" />
+                <circle cx="100" cy="100" r="12" fill="#F59E0B" style="filter:blur(10px); opacity:0.5;">
+                    <animate attributeName="opacity" values="0.2;0.6;0.2" dur="3s" repeatCount="indefinite" />
+                </circle>
                 <circle cx="100" cy="100" r="5" fill="#F59E0B" />
+                
                 <g id="marks"></g>
-                <line id="h" x1="100" y1="100" x2="100" y2="65" stroke="#fff" stroke-width="4" stroke-linecap="round" />
-                <line id="m" x1="100" y1="100" x2="100" y2="45" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round" />
-                <line id="s" x1="100" y1="100" x2="100" y2="35" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round" />
+                <line id="h" x1="100" y1="100" x2="100" y2="65" stroke="#fff" stroke-width="5" stroke-linecap="round" />
+                <line id="m" x1="100" y1="100" x2="100" y2="45" stroke="#38BDF8" stroke-width="3" stroke-linecap="round" />
+                <line id="s" x1="100" y1="100" x2="100" y2="35" stroke="#F43F5E" stroke-width="1.5" stroke-linecap="round" />
             </svg>
-            <div class="ticker-text">
-                CAUTION NOW<br>LIMIT LOAD FOR 13H
+            
+            <div style="margin-top:25px; text-align:center; width:100%;">
+                <div style="color:#F59E0B; font-weight:700; font-size:10px; letter-spacing:4px; text-transform:uppercase; margin-bottom:8px; opacity:0.8;">CAUTION NOW</div>
+                <div style="color:#fff; font-weight:700; font-size:12px; letter-spacing:1px; text-shadow: 0 0 15px #ffffff66; animation: pulse 2s infinite;">
+                    🟡 LIMIT LOAD FOR 13H
+                </div>
             </div>
         </div>
     </aside>
 
     <main>
-        <h1>Incident Logs & System Docs</h1>
+        <h1>DK2 Strategy | Docs & Incident UI</h1>
         
         <div class="kpi-container">
             <div class="kpi-card">
-                <div class="kpi-label">Active Incidents</div>
-                <div class="kpi-value">0</div>
-                <div class="kpi-sub" style="color: var(--accent-green);">ALL SYSTEMS NOMINAL</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">Uptime</div>
-                <div class="kpi-value">99.9%</div>
-                <div class="kpi-sub" style="color: var(--text-secondary);">ROLLING 30 DAYS</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">Last Retrain</div>
+                <div class="kpi-label">Optimal Point</div>
                 <div class="kpi-value">03:00</div>
-                <div class="kpi-sub" style="color: var(--accent-blue);">MODEL STABLE</div>
+                <div class="kpi-sub" style="color:#10B981">49g CO2</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Peak Stress</div>
+                <div class="kpi-value">17:00</div>
+                <div class="kpi-sub" style="color:#EF4444">68g CO2</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Grid Mean</div>
+                <div class="kpi-value">57.7g</div>
+                <div class="kpi-sub" style="color:#38BDF8">Intensity Baseline</div>
             </div>
         </div>
 
-        <h3>System Pulse Overview</h3>
-        <div id="chart" style="width:100%; height:350px; margin-bottom: 20px;"></div>
+        <h3>Forecast Overview</h3>
+        <div id="chart" style="width:100%; height:380px; margin-bottom: 20px;"></div>
 
-        <h3>Recent Incidents</h3>
+        <h3>Hourly Breakdown</h3>
         <table>
             <thead>
                 <tr>
                     <th>Time</th>
-                    <th>Type</th>
+                    <th>Price</th>
+                    <th>CO2 (g)</th>
                     <th>Status</th>
-                    <th>Severity</th>
                 </tr>
             </thead>
             <tbody>
+                <tr><td>02:00</td><td>0.855</td><td>49.0</td><td>🟡 CAUTION</td></tr>
+                <tr><td>03:00</td><td>0.840</td><td>45.6</td><td>🟢 BEST</td></tr>
                 <tr class="highlight-row">
-                    <td>04:00</td>
-                    <td>Drift Check</td>
-                    <td>Normal</td>
-                    <td>Low</td>
+                    <td>04:00 (NOW)</td>
+                    <td>0.825</td>
+                    <td>48.5</td>
+                    <td>🟡 CAUTION</td>
                 </tr>
-                <tr>
-                    <td>01:00</td>
-                    <td>Data Ingest</td>
-                    <td>Completed</td>
-                    <td>-</td>
-                </tr>
-                <tr>
-                    <td>20:00</td>
-                    <td>T+1 Forecast</td>
-                    <td>Completed</td>
-                    <td>-</td>
-                </tr>
+                <tr><td>05:00</td><td>0.810</td><td>50.1</td><td>🟡 CAUTION</td></tr>
+                <tr><td>06:00</td><td>0.797</td><td>53.0</td><td>🟡 CAUTION</td></tr>
             </tbody>
         </table>
     </main>
 
     <script>
-        // CLOCK LOGIC
+        // --- EXACT CLOCK LOGIC FROM PYTHON SCRIPT ---
         const g = document.getElementById('marks');
         for (let i=0; i<12; i++) {
             const a = (i*30)*(Math.PI/180);
             const x = 100+84*Math.sin(a); const y = 100-84*Math.cos(a);
             const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
             c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","3.5");
-            c.setAttribute("fill", i < 6 ? '#EF4444' : (i < 10 ? '#F59E0B' : '#10B981')); 
+            // Color logic mimicking Streamlit array
+            c.setAttribute("fill", i < 4 || i > 18 ? '#10B981' : (i > 6 && i < 10 ? '#EF4444' : '#F59E0B')); 
             g.appendChild(c);
         }
 
-        function updateClock() {
+        function tick() {
             const d = new Date();
-            const hA = (d.getHours() % 12) * 30 + d.getMinutes() * 0.5;
-            const mA = d.getMinutes() * 6;
-            const sA = d.getSeconds() * 6;
-            document.getElementById('h').setAttribute('transform', `rotate(${hA},100,100)`);
-            document.getElementById('m').setAttribute('transform', `rotate(${mA},100,100)`);
-            document.getElementById('s').setAttribute('transform', `rotate(${sA},100,100)`);
+            const hAngle = (d.getHours()%12)*30 + d.getMinutes()*0.5;
+            const mAngle = d.getMinutes()*6;
+            const sAngle = d.getSeconds()*6;
+            document.getElementById('h').setAttribute('transform',`rotate(${hAngle},100,100)`);
+            document.getElementById('m').setAttribute('transform',`rotate(${mAngle},100,100)`);
+            document.getElementById('s').setAttribute('transform',`rotate(${sAngle},100,100)`);
         }
-        setInterval(updateClock, 1000);
-        updateClock();
+        setInterval(tick, 1000); 
+        tick();
 
-        // PLOTLY CHART LOGIC (Mimicking the Streamlit dual-axis chart)
-        const xValues = Array.from({length: 24}, (_, i) => `${i < 10 ? '0'+i : i}:00`);
+        // --- PLOTLY CHART (Matching your Streamlit colors and layout perfectly) ---
+        const xVals = Array.from({length: 24}, (_, i) => `${i < 10 ? '0'+i : i}:00`);
         
-        // Bar trace (Background volume/price simulation)
+        // Bar Trace (Opacity 0.4, colored by status)
         const traceBars = {
-            x: xValues,
-            y: Array.from({length: 24}, () => 40 + Math.random() * 40),
+            x: xVals,
+            y: Array.from({length: 24}, () => Math.random()),
             type: 'bar',
             marker: {
-                color: xValues.map((_, i) => i < 5 ? '#EF4444' : (i < 15 ? '#F59E0B' : '#10B981')),
+                color: xVals.map((_, i) => i < 5 ? '#EF4444' : (i < 15 ? '#F59E0B' : '#10B981')),
                 opacity: 0.4
             },
             yaxis: 'y1'
         };
 
-        // Line trace (Foreground spline line)
+        // Line Trace (Spline, #38BDF8, width 4)
         const traceLine = {
-            x: xValues,
-            y: Array.from({length: 24}, () => 20 + Math.random() * 60),
+            x: xVals,
+            y: Array.from({length: 24}, () => 40 + Math.random() * 40),
             type: 'scatter',
             mode: 'lines',
-            line: {color: '#38BDF8', width: 3, shape: 'spline'},
+            line: {color: '#38BDF8', width: 4, shape: 'spline'},
             yaxis: 'y2'
         };
 
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { color: '#9E9E9E', family: 'Outfit', size: 10 },
-            margin: { l: 30, r: 30, t: 10, b: 30 },
+            font: { color: '#F1F5F9', family: 'Outfit' },
+            margin: { l: 0, r: 0, t: 0, b: 0 },
             showlegend: false,
             barmode: 'overlay',
-            xaxis: { 
-                showgrid: false, 
-                zeroline: false,
-                tickangle: 0
-            },
-            yaxis: { 
-                showgrid: false, 
-                zeroline: false,
-                side: 'left'
-            },
-            yaxis2: {
-                showgrid: false,
-                zeroline: false,
-                overlaying: 'y',
-                side: 'right'
-            }
+            xaxis: { showgrid: false, zeroline: false },
+            yaxis: { showgrid: false, zeroline: false, side: 'left' },
+            yaxis2: { showgrid: false, zeroline: false, overlaying: 'y', side: 'right' }
         };
         Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
     </script>
