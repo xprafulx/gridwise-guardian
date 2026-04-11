@@ -167,40 +167,42 @@ def generate_full_day_forecast(area_name, engine, target_date):
     
     return df_preds
 
-def run_job():
-    engine = get_db_connection()
-    print(f"🚀 GENERATING SMART FORECASTS FOR: {TARGET_DATE.date()}")
-    
-    for area in ['DK1', 'DK2']:
-        forecast_df = generate_full_day_forecast(area, engine, TARGET_DATE)
-        if forecast_df is not None:
-            forecast_df.to_sql(f'temp_{area.lower()}', engine, if_exists='replace', index=False)
-            
-            upsert_query = text(f"""
-                INSERT INTO ai_forecasts (
-                    datetime_utc, price_area, model_version, 
-                    predicted_co2, market_price_dkk_kwh, 
-                    should_charge, recommendation_status
-                )
-                SELECT 
-                    datetime_utc, price_area, model_version, 
-                    predicted_co2, market_price_dkk_kwh, 
-                    should_charge, recommendation_status 
-                FROM temp_{area.lower()}
-                ON CONFLICT (datetime_utc, price_area, model_version) 
-                DO UPDATE SET 
-                    predicted_co2 = EXCLUDED.predicted_co2,
-                    market_price_dkk_kwh = EXCLUDED.market_price_dkk_kwh,
-                    should_charge = EXCLUDED.should_charge,
-                    recommendation_status = EXCLUDED.recommendation_status,
-                    prediction_timestamp = CURRENT_TIMESTAMP;
-            """)
-            
-            with engine.begin() as conn:
-                conn.execute(upsert_query)
-                conn.execute(text(f"DROP TABLE IF EXISTS temp_{area.lower()};"))
+    # predict_job.py (Relevant logic for the bottom of your file)
+    def run_job():
+        engine = get_db_connection()
+        print(f"🚀 GENERATING SMART FORECASTS FOR: {TARGET_DATE.date()}")
+        
+        for area in ['DK1', 'DK2']:
+            forecast_df = generate_full_day_forecast(area, engine, TARGET_DATE)
+            if forecast_df is not None:
+                # We use replace for the temp table, but the UPSERT handles the main table
+                forecast_df.to_sql(f'temp_{area.lower()}', engine, if_exists='replace', index=False)
                 
-            print(f"✅ {area} forecasts synced to Neon (Model: {forecast_df['model_version'].iloc[0]})")
+                upsert_query = text(f"""
+                    INSERT INTO ai_forecasts (
+                        datetime_utc, price_area, model_version, 
+                        predicted_co2, market_price_dkk_kwh, 
+                        should_charge, recommendation_status
+                    )
+                    SELECT 
+                        datetime_utc, price_area, model_version, 
+                        predicted_co2, market_price_dkk_kwh, 
+                        should_charge, recommendation_status 
+                    FROM temp_{area.lower()}
+                    ON CONFLICT (datetime_utc, price_area, model_version) 
+                    DO UPDATE SET 
+                        predicted_co2 = EXCLUDED.predicted_co2,
+                        market_price_dkk_kwh = EXCLUDED.market_price_dkk_kwh,
+                        should_charge = EXCLUDED.should_charge,
+                        recommendation_status = EXCLUDED.recommendation_status,
+                        prediction_timestamp = CURRENT_TIMESTAMP;
+                """)
+                
+                with engine.begin() as conn:
+                    conn.execute(upsert_query)
+                    conn.execute(text(f"DROP TABLE IF EXISTS temp_{area.lower()};"))
+                    
+                print(f"✅ {area} forecasts synced to Neon (Model: {forecast_df['model_version'].iloc[0]})")
 
 if __name__ == "__main__":
     run_job()
