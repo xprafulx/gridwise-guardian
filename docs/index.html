@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardian Docs & Incidents</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Grotesk:wght@300;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <style>
+        :root {
+            --bg-gradient: radial-gradient(circle at 50% -10%, #1A1F26 0%, #05070A 100%);
+            --sidebar-bg: #05070A;
+            --text-main: #F1F5F9;
+            --accent-blue: #38BDF8;
+            --accent-red: #F43F5E;
+            --card-bg: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* SIDEBAR AREA */
+        aside {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            letter-spacing: -0.05em;
+            text-shadow: 0 0 20px rgba(255,255,255,0.1);
+        }
+
+        /* CLOCK & TICKER */
+        #ticker {
+            margin-top: 20px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 1px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        /* MAIN CONTENT AREA */
+        main {
+            flex-grow: 1;
+            padding: 60px;
+            overflow-y: auto;
+        }
+
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 25px;
+            margin-bottom: 50px;
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 30px;
+            border-radius: 24px;
+            text-align: center;
+            transition: 0.4s ease;
+        }
+
+        .kpi-card:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-5px);
+        }
+
+        .kpi-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 10px; }
+        .kpi-value { font-size: 40px; font-weight: 900; }
+
+        /* INCIDENT TABLE */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th { text-align: left; color: #475569; font-size: 12px; text-transform: uppercase; padding: 15px; }
+        td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        .highlight-row {
+            background: rgba(56, 189, 248, 0.05);
+            font-weight: 900;
+            border-left: 4px solid var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+
+    <aside>
+        <h2 style="color: var(--accent-blue); letter-spacing: 4px;">GUARDIAN</h2>
+        
+        <svg width="180" height="180" viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="95" stroke="rgba(255,255,255,0.05)" stroke-width="1" fill="none" />
+            <circle cx="100" cy="100" r="12" fill="#10B981" style="filter:blur(10px); opacity:0.5;"></circle>
+            <circle cx="100" cy="100" r="5" fill="#10B981"></circle>
+            <line id="h" x1="100" y1="100" x2="100" y2="65" stroke="#fff" stroke-width="5" stroke-linecap="round" />
+            <line id="m" x1="100" y1="100" x2="100" y2="45" stroke="#38BDF8" stroke-width="3" stroke-linecap="round" />
+            <line id="s" x1="100" y1="100" x2="100" y2="35" stroke="#F43F5E" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+
+        <div id="ticker" style="color: #10B981;">🟢 ALL SYSTEMS OPERATIONAL</div>
+    </aside>
+
+    <main>
+        <h1>Incident Logs & System Docs</h1>
+        
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <div class="kpi-label">Active Incidents</div>
+                <div class="kpi-value">0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Uptime</div>
+                <div class="kpi-value">99.9%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Last Retrain</div>
+                <div class="kpi-value">03:00</div>
+            </div>
+        </div>
+
+        <h3>System Pulse</h3>
+        <div id="chart" style="width:100%; height:300px;"></div>
+
+        <h3>Recent Incidents</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="highlight-row">
+                    <td>04:00 (NOW)</td>
+                    <td>Drift Check</td>
+                    <td>Normal</td>
+                    <td>Low</td>
+                </tr>
+                <tr>
+                    <td>01:00</td>
+                    <td>Data Ingest</td>
+                    <td>Completed</td>
+                    <td>-</td>
+                </tr>
+            </tbody>
+        </table>
+    </main>
+
+    <script>
+        // --- 1. CLOCK LOGIC ---
+        function updateClock() {
+            const d = new Date();
+            const hA = (d.getHours() % 12) * 30 + d.getMinutes() * 0.5;
+            const mA = d.getMinutes() * 6;
+            const sA = d.getSeconds() * 6;
+            document.getElementById('h').setAttribute('transform', `rotate(${hA},100,100)`);
+            document.getElementById('m').setAttribute('transform', `rotate(${mA},100,100)`);
+            document.getElementById('s').setAttribute('transform', `rotate(${sA},100,100)`);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- 2. CHART LOGIC (Plotly.js) ---
+        const trace = {
+            x: Array.from({length: 24}, (_, i) => `${i}:00`),
+            y: Array.from({length: 24}, () => Math.random() * 100),
+            type: 'scatter',
+            mode: 'lines',
+            line: {color: '#38BDF8', width: 3, shape: 'spline'}
+        };
+        const layout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#475569' },
+            margin: { l: 30, r: 10, t: 10, b: 30 },
+            xaxis: { showgrid: false },
+            yaxis: { showgrid: false }
+        };
+        Plotly.newPlot('chart', [trace], layout);
+    </script>
+</body>
+</html>
