@@ -9,11 +9,8 @@
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
     <style>
-        /* --- EXACT CSS FROM YOUR PYTHON SCRIPT --- */
-        
         body, html {
-            margin: 0; padding: 0; height: 100%;
-            /* THE ULTIMATE BACKGROUND: Deep Velvet & Neon Depth */
+            margin: 0; padding: 0; height: 100%; width: 100%;
             background: radial-gradient(circle at 50% -10%, #1A1F26 0%, #05070A 100%);
             color: #F1F5F9;
             font-family: 'Outfit', sans-serif;
@@ -21,7 +18,6 @@
             overflow: hidden;
         }
 
-        /* TEXT THAT GLOWS */
         h1, h2, h3 {
             font-family: 'Space Grotesk', sans-serif !important;
             font-weight: 700 !important;
@@ -31,20 +27,20 @@
             margin-top: 0;
         }
 
-        /* CUSTOM SCROLLBAR */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
 
-        /* SIDEBAR */
         aside {
             width: 320px;
+            min-width: 320px;
             background-color: #05070A !important;
             border-right: 1px solid rgba(255, 255, 255, 0.02);
             display: flex;
             flex-direction: column;
             padding: 40px 20px;
             box-sizing: border-box;
+            z-index: 10;
         }
 
         .sidebar-title {
@@ -52,19 +48,42 @@
             margin-bottom: 30px;
         }
 
-        /* MAIN CONTENT */
+        /* --- THE WIDTH FIX --- */
         main {
-            flex-grow: 1;
-            padding: 40px 60px;
+            flex: 1; /* Forces main to take up all remaining space */
+            width: 100%;
+            padding: 40px 5%; /* Responsive padding */
             overflow-y: auto;
+            box-sizing: border-box;
         }
 
-        /* KPI CARD: Sleek, Dark, and Sharp */
+        /* INTERACTIVE DROPDOWN */
+        select {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #fff;
+            width: 100%;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        select option {
+            background: #05070A;
+            color: #fff;
+        }
+
         .kpi-container {
             display: flex;
             gap: 20px;
             margin-bottom: 40px;
             margin-top: 20px;
+            width: 100%;
         }
 
         .kpi-card {
@@ -88,7 +107,6 @@
         .kpi-value { font-size: 2.8rem; font-weight: 900; color: #F8FAFC; line-height: 1; font-family: 'Space Grotesk'; }
         .kpi-sub { font-size: 0.9rem; margin-top: 10px; font-weight: 500; letter-spacing: 0.05em; }
 
-        /* THE BOLD HIGHLIGHT TABLE */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -104,16 +122,15 @@
             text-align: left; 
             color: #475569; 
             font-size: 12px; 
-            padding: 12px 15px; 
+            padding: 15px; 
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
         td { 
-            padding: 12px 15px; 
+            padding: 15px; 
             border-bottom: 1px solid rgba(255,255,255,0.02); 
         }
 
-        /* Exact Streamlit highlight style from your code */
         .highlight-row {
             background-color: rgba(56, 189, 248, 0.08); 
             font-weight: 900; 
@@ -121,7 +138,6 @@
             border-bottom: 2px solid #38BDF8;
         }
 
-        /* TICKING CLOCK CONTAINER */
         .clock-container {
             display: flex;
             flex-direction: column;
@@ -141,8 +157,12 @@
 
     <aside>
         <h2 class="sidebar-title">GRIDWISE</h2>
-        <div style="font-size: 12px; color: #475569; margin-bottom: 5px;">Region</div>
-        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 20px; color: #fff;">DK2</div>
+        <div style="font-size: 12px; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 2px;">Region Select</div>
+        
+        <select id="regionSelect" onchange="updateDashboard()">
+            <option value="DK1">DK1 Strategy Area</option>
+            <option value="DK2" selected>DK2 Strategy Area</option>
+        </select>
         
         <div class="clock-container">
             <svg width="170" height="170" viewBox="0 0 200 200">
@@ -168,22 +188,22 @@
     </aside>
 
     <main>
-        <h1>DK2 Strategy | Docs & Incident UI</h1>
+        <h1 id="dashboardTitle">DK2 Strategy | Docs & Incident UI</h1>
         
         <div class="kpi-container">
             <div class="kpi-card">
                 <div class="kpi-label">Optimal Point</div>
-                <div class="kpi-value">03:00</div>
-                <div class="kpi-sub" style="color:#10B981">49g CO2</div>
+                <div class="kpi-value" id="kpiBestTime">03:00</div>
+                <div class="kpi-sub" style="color:#10B981" id="kpiBestCo2">49g CO2</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Peak Stress</div>
-                <div class="kpi-value">17:00</div>
-                <div class="kpi-sub" style="color:#EF4444">68g CO2</div>
+                <div class="kpi-value" id="kpiWorstTime">17:00</div>
+                <div class="kpi-sub" style="color:#EF4444" id="kpiWorstCo2">68g CO2</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Grid Mean</div>
-                <div class="kpi-value">57.7g</div>
+                <div class="kpi-value" id="kpiMean">57.7g</div>
                 <div class="kpi-sub" style="color:#38BDF8">Intensity Baseline</div>
             </div>
         </div>
@@ -191,40 +211,71 @@
         <h3>Forecast Overview</h3>
         <div id="chart" style="width:100%; height:380px; margin-bottom: 20px;"></div>
 
-        <h3>Hourly Breakdown</h3>
+        <h3>Full 24-Hour Breakdown</h3>
         <table>
             <thead>
                 <tr>
                     <th>Time</th>
-                    <th>Price</th>
-                    <th>CO2 (g)</th>
-                    <th>Status</th>
+                    <th>Price (DKK)</th>
+                    <th>Predicted CO2 (g)</th>
+                    <th>System Recommendation</th>
                 </tr>
             </thead>
-            <tbody>
-                <tr><td>02:00</td><td>0.855</td><td>49.0</td><td>🟡 CAUTION</td></tr>
-                <tr><td>03:00</td><td>0.840</td><td>45.6</td><td>🟢 BEST</td></tr>
-                <tr class="highlight-row">
-                    <td>04:00 (NOW)</td>
-                    <td>0.825</td>
-                    <td>48.5</td>
-                    <td>🟡 CAUTION</td>
-                </tr>
-                <tr><td>05:00</td><td>0.810</td><td>50.1</td><td>🟡 CAUTION</td></tr>
-                <tr><td>06:00</td><td>0.797</td><td>53.0</td><td>🟡 CAUTION</td></tr>
+            <tbody id="dataTableBody">
             </tbody>
         </table>
     </main>
 
     <script>
-        // --- EXACT CLOCK LOGIC FROM PYTHON SCRIPT ---
+        // --- 1. HANDLE REGION CHANGES ---
+        function updateDashboard() {
+            const region = document.getElementById("regionSelect").value;
+            document.getElementById("dashboardTitle").innerText = `${region} Strategy | Docs & Incident UI`;
+            
+            // In a real app, you would fetch new data here.
+            // For now, we update the title to show it's working!
+        }
+
+        // --- 2. DYNAMICALLY GENERATE 24-HOUR TABLE ---
+        function generateTable() {
+            const tbody = document.getElementById('dataTableBody');
+            let tableHTML = '';
+            const currentHour = new Date().getHours();
+
+            for(let i = 0; i < 24; i++) {
+                let timeStr = (i < 10 ? '0' + i : i) + ':00';
+                
+                // Simulate Data
+                let price = (0.7 + Math.random() * 0.2).toFixed(3);
+                let co2 = (40 + Math.random() * 30).toFixed(1);
+                
+                // Logic for status
+                let statusIcon = i < 7 ? '🟢 BEST' : (i > 16 ? '🔴 AVOID' : '🟡 CAUTION');
+                
+                // Highlight the current hour
+                let isCurrent = (i === currentHour);
+                let rowClass = isCurrent ? 'class="highlight-row"' : '';
+                let timeLabel = isCurrent ? `${timeStr} (NOW)` : timeStr;
+
+                tableHTML += `
+                    <tr ${rowClass}>
+                        <td style="font-weight: ${isCurrent ? '900' : 'normal'}">${timeLabel}</td>
+                        <td>${price}</td>
+                        <td>${co2}</td>
+                        <td style="font-weight: 700;">${statusIcon}</td>
+                    </tr>
+                `;
+            }
+            tbody.innerHTML = tableHTML;
+        }
+
+        // --- 3. CLOCK LOGIC ---
         const g = document.getElementById('marks');
         for (let i=0; i<12; i++) {
             const a = (i*30)*(Math.PI/180);
             const x = 100+84*Math.sin(a); const y = 100-84*Math.cos(a);
             const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
             c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","3.5");
-            // Color logic mimicking Streamlit array
             c.setAttribute("fill", i < 4 || i > 18 ? '#10B981' : (i > 6 && i < 10 ? '#EF4444' : '#F59E0B')); 
             g.appendChild(c);
         }
@@ -238,13 +289,10 @@
             document.getElementById('m').setAttribute('transform',`rotate(${mAngle},100,100)`);
             document.getElementById('s').setAttribute('transform',`rotate(${sAngle},100,100)`);
         }
-        setInterval(tick, 1000); 
-        tick();
+        setInterval(tick, 1000); tick();
 
-        // --- PLOTLY CHART (Matching your Streamlit colors and layout perfectly) ---
+        // --- 4. PLOTLY CHART ---
         const xVals = Array.from({length: 24}, (_, i) => `${i < 10 ? '0'+i : i}:00`);
-        
-        // Bar Trace (Opacity 0.4, colored by status)
         const traceBars = {
             x: xVals,
             y: Array.from({length: 24}, () => Math.random()),
@@ -255,8 +303,6 @@
             },
             yaxis: 'y1'
         };
-
-        // Line Trace (Spline, #38BDF8, width 4)
         const traceLine = {
             x: xVals,
             y: Array.from({length: 24}, () => 40 + Math.random() * 40),
@@ -265,7 +311,6 @@
             line: {color: '#38BDF8', width: 4, shape: 'spline'},
             yaxis: 'y2'
         };
-
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
@@ -278,6 +323,9 @@
             yaxis2: { showgrid: false, zeroline: false, overlaying: 'y', side: 'right' }
         };
         Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
+
+        // Initialize table on load
+        generateTable();
     </script>
 </body>
 </html>
