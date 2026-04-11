@@ -21,6 +21,7 @@ def export_static_api():
     # 🛠️ IMPROVED QUERY: 
     # We grab the last 12 hours + everything in the future. 
     # This ensures that even at 00:35 AM, your dashboard shows "Today's" data.
+# Grab everything from the last 12 hours up to the future
     forecast_query = """
         SELECT datetime_utc, market_price_dkk_kwh, predicted_co2, price_area, recommendation_status
         FROM ai_forecasts 
