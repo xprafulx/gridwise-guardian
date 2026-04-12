@@ -61,25 +61,25 @@ def download_model_from_neon(area_name):
 
 def get_future_prices(area_name, target_date):
     """
-    Bypasses broken date filters. Uses the NEW API column 'TimeUTC'.
+    Bulletproof API Fetcher: Uses the exact region filter AND the correct 'TimeUTC' sort.
     """
     url = "https://api.energidataservice.dk/dataset/DayAheadPrices"
     params = {
-        "sort": "TimeUTC DESC",  # NEW COLUMN NAME!
-        "limit": 200
+        # 🛡️ THE FIX: Force the API to ONLY return the region we want (DK1 or DK2)
+        "filter": json.dumps({"PriceArea": [area_name.upper()]}),
+        "sort": "TimeUTC DESC",
+        # Limit 400 is now huge, because it only represents DK1/DK2 data (up to 4 days worth!)
+        "limit": 400 
     }
     
     try:
-        print(f"📡 Requesting recent prices for {area_name}...")
+        print(f"📡 Requesting recent prices exclusively for {area_name}...")
         res = requests.get(url, params=params, timeout=15)
         if res.status_code == 200:
             records = res.json().get('records', [])
             if not records: return None
             
             df = pd.DataFrame(records)
-            
-            # Filter for specific region
-            df = df[df['PriceArea'] == area_name.upper()]
             
             # Use the new time column
             df['datetime_utc'] = pd.to_datetime(df['TimeUTC'], utc=True)
