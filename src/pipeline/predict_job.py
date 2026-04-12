@@ -19,16 +19,16 @@ from src.database.connection import get_db_connection
 MODE = "TOMORROW" 
 # ==========================================================
 
-# 🕰️ IRON-CLAD DATE LOGIC
-now_utc = datetime.now(timezone.utc)
-base_date = (now_utc + timedelta(hours=2)).replace(hour=0, minute=0, second=0, microsecond=0)
+# 🕰️ DANISH TIMEZONE ALIGNMENT
+# We use Pandas to lock to exactly Midnight in Copenhagen, regardless of DST.
+cph_now = pd.Timestamp.now(tz='Europe/Copenhagen')
 
 if MODE == "TODAY":
-    TARGET_DATE = base_date
+    TARGET_DATE_CPH = cph_now.normalize() # Snaps to 00:00:00 CEST
 else:
-    TARGET_DATE = base_date + timedelta(days=1)
+    TARGET_DATE_CPH = cph_now.normalize() + pd.Timedelta(days=1)
 
-print(f"🎯 MODE: {MODE} | Exact 24h Window: {TARGET_DATE.strftime('%Y-%m-%d 00:00')} to {TARGET_DATE.strftime('%Y-%m-%d 23:00')} UTC")
+print(f"🎯 MODE: {MODE} | Danish Day: {TARGET_DATE_CPH.strftime('%Y-%m-%d')}")
 
 def get_dynamic_thresholds(area_name, engine):
     query = f"""
@@ -59,16 +59,11 @@ def download_model_from_neon(area_name):
     payload = joblib.load(buffer)
     return payload['model'], payload['features'], result[1]
 
-def get_future_prices(area_name, target_date):
-    """
-    Bulletproof API Fetcher: Uses the exact region filter AND the correct 'TimeUTC' sort.
-    """
+def get_future_prices(area_name, target_cph):
     url = "https://api.energidataservice.dk/dataset/DayAheadPrices"
     params = {
-        # 🛡️ THE FIX: Force the API to ONLY return the region we want (DK1 or DK2)
         "filter": json.dumps({"PriceArea": [area_name.upper()]}),
         "sort": "TimeUTC DESC",
-        # Limit 400 is now huge, because it only represents DK1/DK2 data (up to 4 days worth!)
         "limit": 400 
     }
     
@@ -80,18 +75,18 @@ def get_future_prices(area_name, target_date):
             if not records: return None
             
             df = pd.DataFrame(records)
-            
-            # Use the new time column
             df['datetime_utc'] = pd.to_datetime(df['TimeUTC'], utc=True)
             df['price_kwh'] = pd.to_numeric(df['DayAheadPriceDKK']) / 1000
             
-            # THE EXACT 24-HOUR FILTER
-            end_date = target_date + timedelta(days=1)
-            mask = (df['datetime_utc'] >= target_date) & (df['datetime_utc'] < end_date)
+            # 🛡️ THE EXACT UTC BOUNDS OF THE DANISH DAY
+            start_utc = target_cph.tz_convert('UTC')
+            end_utc = start_utc + pd.Timedelta(days=1)
+            
+            mask = (df['datetime_utc'] >= start_utc) & (df['datetime_utc'] < end_utc)
             df_filtered = df[mask]
             
             if df_filtered.empty: 
-                print(f"⚠️ Data downloaded, but {target_date.date()} is not available yet.")
+                print(f"⚠️ Data downloaded, but {target_cph.date()} is not available yet.")
                 return None
                 
             return df_filtered.set_index('datetime_utc').resample('h').mean(numeric_only=True)['price_kwh'].to_dict()
@@ -101,12 +96,12 @@ def get_future_prices(area_name, target_date):
         print(f"❌ Price API Error: {e}")
     return None
 
-def generate_full_day_forecast(area_name, engine, target_date):
+def generate_full_day_forecast(area_name, engine, target_cph):
     model, feature_names, db_version = download_model_from_neon(area_name)
     if model is None: return None
     
     t = get_dynamic_thresholds(area_name, engine)
-    prices = get_future_prices(area_name, target_date)
+    prices = get_future_prices(area_name, target_cph)
     
     if not prices: 
         print(f"⚠️ Missing price data. Skipping {area_name}.")
@@ -119,26 +114,31 @@ def generate_full_day_forecast(area_name, engine, target_date):
     dk_holidays = holidays.Denmark()
 
     preds = []
+    # Loop over the 24 hours of the DANISH day
     for h in range(24):
-        time_utc = pd.to_datetime(target_date.replace(hour=h), utc=True)
+        # 1. Get the local Danish Time
+        time_local = target_cph + pd.Timedelta(hours=h)
+        # 2. Convert to UTC to fetch prices and save to database safely
+        time_utc = time_local.tz_convert('UTC')
         
-        # If an hour is missing from the API, use 0 to prevent crash
+        # Now every hour matches perfectly without hitting tomorrow!
         p = prices.get(time_utc, 0)
         
         feats = {
             'spot_price_dkk_kwh': p, 'wind_speed': last_weather['wind_speed'],
-            'solar_radiation': last_weather['solar_radiation'], 'hour': h,
-            'day_of_week': time_utc.weekday(), 'month': time_utc.month,
-            'hour_sin': np.sin(2*np.pi*h/24), 'hour_cos': np.cos(2*np.pi*h/24),
-            'is_holiday': 1 if time_utc.date() in dk_holidays else 0, 
-            'is_weekend': 1 if time_utc.weekday()>=5 else 0,
+            'solar_radiation': last_weather['solar_radiation'], 'hour': time_local.hour,
+            'day_of_week': time_local.weekday(), 'month': time_local.month,
+            'hour_sin': np.sin(2*np.pi*time_local.hour/24), 'hour_cos': np.cos(2*np.pi*time_local.hour/24),
+            'is_holiday': 1 if time_local.date() in dk_holidays else 0, 
+            'is_weekend': 1 if time_local.weekday()>=5 else 0,
             'co2_lag_1h': history[-1], 'co2_lag_2h': history[-2], 
             'co2_lag_24h': history[-24], 'co2_lag_168h': history[-168]
         }
         
         co2_pred = model.predict(pd.DataFrame([feats])[feature_names])[0]
         
-        if (17 <= h <= 21) or (p > t['p83_price']) or (co2_pred > t['p83_co2']):
+        # Avoid 17:00 to 21:00 Local Danish Time
+        if (17 <= time_local.hour <= 21) or (p > t['p83_price']) or (co2_pred > t['p83_co2']):
             status = "AVOID"
         elif (p < t['p33_price']) and (co2_pred < t['p33_co2']):
             status = "BEST"
@@ -146,9 +146,12 @@ def generate_full_day_forecast(area_name, engine, target_date):
             status = "CAUTION"
 
         preds.append({
-            'datetime_utc': time_utc, 'price_area': area_name, 
-            'model_version': db_version, 'predicted_co2': float(co2_pred), 
-            'market_price_dkk_kwh': p, 'recommendation_status': status
+            'datetime_utc': time_utc.to_pydatetime(), # Clean DB insert
+            'price_area': area_name, 
+            'model_version': db_version, 
+            'predicted_co2': float(co2_pred), 
+            'market_price_dkk_kwh': p, 
+            'recommendation_status': status
         })
         history.append(co2_pred)
 
@@ -159,7 +162,7 @@ def generate_full_day_forecast(area_name, engine, target_date):
 def run_job():
     engine = get_db_connection()
     for area in ['DK1', 'DK2']:
-        df = generate_full_day_forecast(area, engine, TARGET_DATE)
+        df = generate_full_day_forecast(area, engine, TARGET_DATE_CPH)
         if df is not None:
             df.to_sql(f'temp_{area.lower()}', engine, if_exists='replace', index=False)
             upsert = text(f"""
