@@ -16,7 +16,7 @@ from src.database.connection import get_db_connection
 
 # ==========================================================
 # 🔄 TOGGLE SWITCH: Change to "TODAY" or "TOMORROW"
-MODE = "TOMORROW" 
+MODE = "TODAY" 
 # ==========================================================
 
 # 🕰️ DANISH TIMEZONE ALIGNMENT
