@@ -36,8 +36,12 @@ def export_static_api():
 
     forecast_list = []
     for _, row in forecast_df.iterrows():
+        # 🇩🇰 THE FIX: Convert UTC to Danish Time for the Customer!
+        utc_time = pd.to_datetime(row['datetime_utc']).tz_localize('UTC') if row['datetime_utc'].tzinfo is None else pd.to_datetime(row['datetime_utc'])
+        danish_time = utc_time.tz_convert('Europe/Copenhagen')
+        
         forecast_list.append({
-            "time": pd.to_datetime(row['datetime_utc']).strftime('%H:00'),
+            "time": danish_time.strftime('%H:00'),  # Now prints the correct Danish hour!
             "price": round(float(row['market_price_dkk_kwh']), 3),
             "co2": round(float(row['predicted_co2']), 1),
             "region": row['price_area'],
@@ -55,7 +59,7 @@ def export_static_api():
     with open(file_path, 'w') as f:
         json.dump(payload, f, indent=4)
 
-    print(f"✅ Static API JSON dumped successfully at: {file_path}")
+    print(f"✅ Static API JSON dumped successfully in Danish Time at: {file_path}")
 
 def main():
     print("⚡️ GREENHOUR DAILY PIPELINE STARTED")
