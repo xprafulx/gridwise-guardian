@@ -1,17 +1,10 @@
 {
-    "generated_at": "2026-04-11T23:16:38.994375+00:00",
+    "generated_at": "2026-04-12T12:44:21.609182+00:00",
     "forecast": [
         {
-            "time": "00:00",
+            "time": "01:00",
             "price": 0.0,
-            "co2": 25.6,
-            "region": "DK2",
-            "status": "BEST"
-        },
-        {
-            "time": "00:00",
-            "price": 0.0,
-            "co2": 44.5,
+            "co2": 48.5,
             "region": "DK1",
             "status": "BEST"
         },
@@ -20,13 +13,6 @@
             "price": 0.0,
             "co2": 27.7,
             "region": "DK2",
-            "status": "BEST"
-        },
-        {
-            "time": "01:00",
-            "price": 0.0,
-            "co2": 48.5,
-            "region": "DK1",
             "status": "BEST"
         },
         {
@@ -74,15 +60,15 @@
         {
             "time": "05:00",
             "price": 0.0,
-            "co2": 39.1,
-            "region": "DK2",
+            "co2": 77.3,
+            "region": "DK1",
             "status": "CAUTION"
         },
         {
             "time": "05:00",
             "price": 0.0,
-            "co2": 77.3,
-            "region": "DK1",
+            "co2": 39.1,
+            "region": "DK2",
             "status": "CAUTION"
         },
         {
@@ -102,22 +88,15 @@
         {
             "time": "07:00",
             "price": 0.0,
-            "co2": 44.3,
-            "region": "DK2",
-            "status": "CAUTION"
-        },
-        {
-            "time": "07:00",
-            "price": 0.0,
             "co2": 87.9,
             "region": "DK1",
             "status": "CAUTION"
         },
         {
-            "time": "08:00",
+            "time": "07:00",
             "price": 0.0,
-            "co2": 90.1,
-            "region": "DK1",
+            "co2": 44.3,
+            "region": "DK2",
             "status": "CAUTION"
         },
         {
@@ -125,6 +104,13 @@
             "price": 0.0,
             "co2": 46.8,
             "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "08:00",
+            "price": 0.0,
+            "co2": 90.1,
+            "region": "DK1",
             "status": "CAUTION"
         },
         {
@@ -185,16 +171,16 @@
         },
         {
             "time": "13:00",
-            "price": 0.178,
-            "co2": 105.9,
-            "region": "DK1",
+            "price": 0.296,
+            "co2": 77.8,
+            "region": "DK2",
             "status": "CAUTION"
         },
         {
             "time": "13:00",
-            "price": 0.296,
-            "co2": 77.8,
-            "region": "DK2",
+            "price": 0.178,
+            "co2": 105.9,
+            "region": "DK1",
             "status": "CAUTION"
         },
         {
@@ -270,15 +256,15 @@
         {
             "time": "19:00",
             "price": 1.022,
-            "co2": 109.9,
-            "region": "DK2",
+            "co2": 93.0,
+            "region": "DK1",
             "status": "AVOID"
         },
         {
             "time": "19:00",
             "price": 1.022,
-            "co2": 93.0,
-            "region": "DK1",
+            "co2": 109.9,
+            "region": "DK2",
             "status": "AVOID"
         },
         {
@@ -298,15 +284,22 @@
         {
             "time": "21:00",
             "price": 0.904,
-            "co2": 100.2,
-            "region": "DK2",
+            "co2": 93.1,
+            "region": "DK1",
             "status": "AVOID"
         },
         {
             "time": "21:00",
             "price": 0.904,
-            "co2": 93.1,
-            "region": "DK1",
+            "co2": 100.2,
+            "region": "DK2",
+            "status": "AVOID"
+        },
+        {
+            "time": "22:00",
+            "price": 0.0,
+            "co2": 93.6,
+            "region": "DK2",
             "status": "AVOID"
         },
         {
@@ -315,13 +308,6 @@
             "co2": 92.5,
             "region": "DK1",
             "status": "CAUTION"
-        },
-        {
-            "time": "22:00",
-            "price": 0.0,
-            "co2": 93.6,
-            "region": "DK2",
-            "status": "AVOID"
         },
         {
             "time": "23:00",
@@ -336,6 +322,342 @@
             "co2": 91.9,
             "region": "DK2",
             "status": "AVOID"
+        },
+        {
+            "time": "00:00",
+            "price": 0.0,
+            "co2": 25.6,
+            "region": "DK2",
+            "status": "BEST"
+        },
+        {
+            "time": "00:00",
+            "price": 0.0,
+            "co2": 44.7,
+            "region": "DK1",
+            "status": "BEST"
+        },
+        {
+            "time": "01:00",
+            "price": 0.0,
+            "co2": 49.2,
+            "region": "DK1",
+            "status": "BEST"
+        },
+        {
+            "time": "01:00",
+            "price": 0.0,
+            "co2": 27.7,
+            "region": "DK2",
+            "status": "BEST"
+        },
+        {
+            "time": "02:00",
+            "price": 0.0,
+            "co2": 58.4,
+            "region": "DK1",
+            "status": "BEST"
+        },
+        {
+            "time": "02:00",
+            "price": 0.0,
+            "co2": 30.1,
+            "region": "DK2",
+            "status": "BEST"
+        },
+        {
+            "time": "03:00",
+            "price": 0.0,
+            "co2": 33.0,
+            "region": "DK2",
+            "status": "BEST"
+        },
+        {
+            "time": "03:00",
+            "price": 0.0,
+            "co2": 68.8,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "04:00",
+            "price": 0.0,
+            "co2": 75.5,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "04:00",
+            "price": 0.0,
+            "co2": 34.9,
+            "region": "DK2",
+            "status": "BEST"
+        },
+        {
+            "time": "05:00",
+            "price": 0.0,
+            "co2": 39.1,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "05:00",
+            "price": 0.0,
+            "co2": 79.6,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "06:00",
+            "price": 0.0,
+            "co2": 83.8,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "06:00",
+            "price": 0.0,
+            "co2": 41.4,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "07:00",
+            "price": 0.0,
+            "co2": 44.3,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "07:00",
+            "price": 0.0,
+            "co2": 89.4,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "08:00",
+            "price": 0.0,
+            "co2": 46.7,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "08:00",
+            "price": 0.0,
+            "co2": 90.7,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "09:00",
+            "price": 0.0,
+            "co2": 94.8,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "09:00",
+            "price": 0.0,
+            "co2": 50.7,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "10:00",
+            "price": 0.0,
+            "co2": 57.1,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "10:00",
+            "price": 0.0,
+            "co2": 98.1,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "11:00",
+            "price": 0.0,
+            "co2": 106.1,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "11:00",
+            "price": 0.0,
+            "co2": 64.3,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "12:00",
+            "price": 0.0,
+            "co2": 112.2,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "12:00",
+            "price": 0.0,
+            "co2": 74.8,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "13:00",
+            "price": 0.641,
+            "co2": 77.0,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "13:00",
+            "price": 0.801,
+            "co2": 108.6,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "14:00",
+            "price": 0.856,
+            "co2": 105.0,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "14:00",
+            "price": 0.571,
+            "co2": 77.0,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "15:00",
+            "price": 0.914,
+            "co2": 100.0,
+            "region": "DK1",
+            "status": "AVOID"
+        },
+        {
+            "time": "15:00",
+            "price": 0.772,
+            "co2": 78.9,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "16:00",
+            "price": 1.014,
+            "co2": 99.7,
+            "region": "DK1",
+            "status": "AVOID"
+        },
+        {
+            "time": "16:00",
+            "price": 0.815,
+            "co2": 81.0,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "17:00",
+            "price": 0.816,
+            "co2": 83.7,
+            "region": "DK2",
+            "status": "AVOID"
+        },
+        {
+            "time": "17:00",
+            "price": 1.108,
+            "co2": 101.5,
+            "region": "DK1",
+            "status": "AVOID"
+        },
+        {
+            "time": "18:00",
+            "price": 0.749,
+            "co2": 82.6,
+            "region": "DK2",
+            "status": "AVOID"
+        },
+        {
+            "time": "18:00",
+            "price": 1.024,
+            "co2": 102.1,
+            "region": "DK1",
+            "status": "AVOID"
+        },
+        {
+            "time": "19:00",
+            "price": 0.942,
+            "co2": 102.5,
+            "region": "DK1",
+            "status": "AVOID"
+        },
+        {
+            "time": "19:00",
+            "price": 0.504,
+            "co2": 80.2,
+            "region": "DK2",
+            "status": "AVOID"
+        },
+        {
+            "time": "20:00",
+            "price": 0.885,
+            "co2": 103.2,
+            "region": "DK1",
+            "status": "AVOID"
+        },
+        {
+            "time": "20:00",
+            "price": 0.432,
+            "co2": 79.3,
+            "region": "DK2",
+            "status": "AVOID"
+        },
+        {
+            "time": "21:00",
+            "price": 0.873,
+            "co2": 100.9,
+            "region": "DK1",
+            "status": "AVOID"
+        },
+        {
+            "time": "21:00",
+            "price": 0.408,
+            "co2": 75.8,
+            "region": "DK2",
+            "status": "AVOID"
+        },
+        {
+            "time": "22:00",
+            "price": 0.0,
+            "co2": 78.3,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "22:00",
+            "price": 0.0,
+            "co2": 97.4,
+            "region": "DK1",
+            "status": "CAUTION"
+        },
+        {
+            "time": "23:00",
+            "price": 0.0,
+            "co2": 82.0,
+            "region": "DK2",
+            "status": "CAUTION"
+        },
+        {
+            "time": "23:00",
+            "price": 0.0,
+            "co2": 99.4,
+            "region": "DK1",
+            "status": "CAUTION"
         }
     ]
 }
