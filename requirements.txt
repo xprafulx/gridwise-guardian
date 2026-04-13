@@ -1,23 +1,23 @@
-# Web & API
-fastapi
-uvicorn
-requests
+# --- CORE WEB & UI ---
+streamlit
+plotly
 
-# Data & Math
+# --- DATA MANIPULATION & MATH ---
 pandas
 numpy
-prophet
-scikit-learn
-sqlalchemy
-psycopg2-binary
 pytz
 
-# MLOps & Monitoring
-mlflow
-evidently
-xgboost
-optuna
+# --- DATABASE & CONNECTION ---
+sqlalchemy
+psycopg2-binary
 python-dotenv
 
-# Frontend
-streamlit
+# --- MACHINE LEARNING & AI ---
+xgboost
+scikit-learn
+joblib
+optuna
+
+# --- DATA SOURCES & UTILS ---
+requests
+holidays
