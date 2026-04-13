@@ -155,16 +155,46 @@ def render_sidebar_clock(df):
 @st.cache_data(ttl=60)
 def get_dashboard_data(area, date):
     engine = get_db_connection()
-    df = pd.read_sql(f"SELECT datetime_utc, predicted_co2, predicted_price_dkk_kwh as price, recommendation_status FROM ai_forecasts WHERE price_area = '{area}' AND DATE(datetime_utc) = '{date}' ORDER BY datetime_utc ASC", engine)
+    
+    # 1. Cast a wider net (Fetch Yesterday, Today, and Tomorrow in UTC)
+    target_date = pd.to_datetime(date)
+    date_str = target_date.strftime('%Y-%m-%d') # --- FIXED: Create a text string ---
+    
+    yest = (target_date - pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+    tom = (target_date + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    query = f"""
+        SELECT datetime_utc, predicted_co2, market_price_dkk_kwh as price, recommendation_status 
+        FROM ai_forecasts 
+        WHERE price_area = '{area}' 
+        AND DATE(datetime_utc) IN ('{yest}', '{date_str}', '{tom}')
+        ORDER BY datetime_utc ASC
+    """
+    
+    df = pd.read_sql(query, engine)
+    
     if not df.empty:
-        # --- ADDED: The Timezone Conversion ---
-        utc_time = pd.to_datetime(df['datetime_utc']).dt.tz_localize('UTC')
+        # 2. Convert the whole batch to Danish Time safely
+        dt_col = pd.to_datetime(df['datetime_utc'])
+        if dt_col.dt.tz is None:
+            utc_time = dt_col.dt.tz_localize('UTC')
+        else:
+            utc_time = dt_col
+            
         dk_time = utc_time.dt.tz_convert('Europe/Copenhagen')
+        
+        # 3. Create the format strings
+        df['dk_date'] = dk_time.dt.strftime('%Y-%m-%d')
         df['Time'] = dk_time.dt.strftime('%H:00')
+        
+        # 4. Filter down strictly to the Danish day using the STRING
+        df = df[df['dk_date'] == date_str].copy()
         
         c_map = {'BEST': '#10B981', 'CAUTION': '#F59E0B', 'AVOID': '#EF4444'}
         df['bar_color'] = df['recommendation_status'].map(c_map)
-    return df
+        
+    # Reset index to ensure the clock logic loops from 0 to 23 correctly
+    return df.reset_index(drop=True)
 
 @st.cache_data(ttl=60)
 def get_dates(area):
@@ -188,59 +218,62 @@ if date:
     st.title(f"{area} Strategy | {date}")
 
     # --- KPI CARDS ---
-    best = df.loc[df['predicted_co2'].idxmin()]
-    worst = df.loc[df['predicted_co2'].idxmax()]
-    mean_co2 = df['predicted_co2'].mean()
+    if not df.empty:
+        best = df.loc[df['predicted_co2'].idxmin()]
+        worst = df.loc[df['predicted_co2'].idxmax()]
+        mean_co2 = df['predicted_co2'].mean()
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Optimal Point</div><div class="kpi-value">{best["Time"]}</div><div class="kpi-sub" style="color:#10B981">{best["predicted_co2"]:.0f}g CO2</div></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Peak Stress</div><div class="kpi-value">{worst["Time"]}</div><div class="kpi-sub" style="color:#EF4444">{worst["predicted_co2"]:.0f}g CO2</div></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Grid Mean</div><div class="kpi-value">{mean_co2:.1f}g</div><div class="kpi-sub" style="color:#38BDF8">Intensity Baseline</div></div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f'<div class="kpi-card"><div class="kpi-label">Optimal Point</div><div class="kpi-value">{best["Time"]}</div><div class="kpi-sub" style="color:#10B981">{best["predicted_co2"]:.0f}g CO2</div></div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="kpi-card"><div class="kpi-label">Peak Stress</div><div class="kpi-value">{worst["Time"]}</div><div class="kpi-sub" style="color:#EF4444">{worst["predicted_co2"]:.0f}g CO2</div></div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<div class="kpi-card"><div class="kpi-label">Grid Mean</div><div class="kpi-value">{mean_co2:.1f}g</div><div class="kpi-sub" style="color:#38BDF8">Intensity Baseline</div></div>', unsafe_allow_html=True)
 
-    # --- CHART ---
-    st.markdown("### Forecast Overview")
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=df['Time'], y=df['price'], marker_color=df['bar_color'], opacity=0.4))
-    fig.add_trace(go.Scatter(x=df['Time'], y=df['predicted_co2'], mode='lines', line=dict(color='#38BDF8', width=4, shape='spline'), yaxis='y2'))
-    
-    # --- ADDED: Danish Timezone for the Chart Line ---
-    dk_tz = pytz.timezone('Europe/Copenhagen')
-    cur_h = datetime.now(dk_tz).strftime('%H:00')
-    if cur_h in df['Time'].values:
-        fig.add_vline(x=cur_h, line_width=2, line_dash="dot", line_color="rgba(255,255,255,0.4)")
-
-    fig.update_layout(
-        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        yaxis=dict(showgrid=False, title=None), yaxis2=dict(overlaying='y', side='right', showgrid=False),
-        margin=dict(l=0, r=0, t=0, b=0), height=380, showlegend=False
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- 5. THE BOLD BOLD HIGHLIGHT TABLE ---
-    st.markdown("### Hourly Breakdown")
-    
-    table_df = pd.DataFrame({
-        "Time": df['Time'],
-        "Price": df['price'].round(3),
-        "CO2 (g)": df['predicted_co2'].round(1),
-        "Status": df['recommendation_status'].map({'BEST': '🟢 BEST', 'CAUTION': '🟡 CAUTION', 'AVOID': '🔴 AVOID'})
-    })
-
-    def highlight_and_bold(row):
-        # --- ADDED: Danish Timezone for the Glowing Row ---
+        # --- CHART ---
+        st.markdown("### Forecast Overview")
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=df['Time'], y=df['price'], marker_color=df['bar_color'], opacity=0.4))
+        fig.add_trace(go.Scatter(x=df['Time'], y=df['predicted_co2'], mode='lines', line=dict(color='#38BDF8', width=4, shape='spline'), yaxis='y2'))
+        
+        # --- ADDED: Danish Timezone for the Chart Line ---
         dk_tz = pytz.timezone('Europe/Copenhagen')
         cur_h = datetime.now(dk_tz).strftime('%H:00')
-        if row['Time'] == cur_h:
-            # The Active "Seductive" Row: Deep cyan background with glowing cyan text
-            return ['background-color: rgba(0, 209, 255, 0.1); font-weight: 900; color: #00D1FF;'] * len(row)
-        
-        # The Base Rows: Transparent background with sleek slate-grey text
-        return ['background-color: transparent; color: #94A3B8; font-weight: 500;'] * len(row)
+        if cur_h in df['Time'].values:
+            fig.add_vline(x=cur_h, line_width=2, line_dash="dot", line_color="rgba(255,255,255,0.4)")
 
-    st.dataframe(
-        table_df.style.apply(highlight_and_bold, axis=1),
-        use_container_width=True, hide_index=True
-    )
+        fig.update_layout(
+            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(showgrid=False, title=None), yaxis2=dict(overlaying='y', side='right', showgrid=False),
+            margin=dict(l=0, r=0, t=0, b=0), height=380, showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- 5. THE BOLD BOLD HIGHLIGHT TABLE ---
+        st.markdown("### Hourly Breakdown")
+        
+        table_df = pd.DataFrame({
+            "Time": df['Time'],
+            "Price": df['price'].round(3),
+            "CO2 (g)": df['predicted_co2'].round(1),
+            "Status": df['recommendation_status'].map({'BEST': '🟢 BEST', 'CAUTION': '🟡 CAUTION', 'AVOID': '🔴 AVOID'})
+        })
+
+        def highlight_and_bold(row):
+            # --- ADDED: Danish Timezone for the Glowing Row ---
+            dk_tz = pytz.timezone('Europe/Copenhagen')
+            cur_h = datetime.now(dk_tz).strftime('%H:00')
+            if row['Time'] == cur_h:
+                # The Active "Seductive" Row: Deep cyan background with glowing cyan text
+                return ['background-color: rgba(0, 209, 255, 0.1); font-weight: 900; color: #00D1FF;'] * len(row)
+            
+            # The Base Rows: Transparent background with sleek slate-grey text
+            return ['background-color: transparent; color: #94A3B8; font-weight: 500;'] * len(row)
+
+        st.dataframe(
+            table_df.style.apply(highlight_and_bold, axis=1),
+            use_container_width=True, hide_index=True
+        )
+    else:
+        st.warning("No data available for this date.")
