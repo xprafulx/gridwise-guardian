@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit.components.v1 as components
 from src.database.connection import get_db_connection
 from datetime import datetime
+import pytz  # --- ADDED: Timezone library ---
 
 # --- 1. PATH FIX ---
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -62,7 +63,8 @@ def apply_addictive_ui():
 
 # --- 3. TICKER LOGIC (Next Action Calculation) ---
 def get_ticker_logic(df):
-    now = datetime.now()
+    dk_tz = pytz.timezone('Europe/Copenhagen') # --- ADDED: Danish Timezone ---
+    now = datetime.now(dk_tz)
     h = now.hour
     if df.empty or h >= len(df): 
         return "SYNCING PULSE...", "#475569"
@@ -86,7 +88,8 @@ def get_ticker_logic(df):
 
 # --- 4. THE LIVE TICKING CLOCK WITH SECOND HAND & TICKER ---
 def render_sidebar_clock(df):
-    now = datetime.now()
+    dk_tz = pytz.timezone('Europe/Copenhagen') # --- ADDED: Danish Timezone ---
+    now = datetime.now(dk_tz)
     hour_colors = df['bar_color'].tolist()
     current_color = hour_colors[now.hour] if now.hour < len(hour_colors) else "#444"
     current_status = df['recommendation_status'].iloc[now.hour] if now.hour < len(df) else "SYNCING"
@@ -154,7 +157,11 @@ def get_dashboard_data(area, date):
     engine = get_db_connection()
     df = pd.read_sql(f"SELECT datetime_utc, predicted_co2, predicted_price_dkk_kwh as price, recommendation_status FROM ai_forecasts WHERE price_area = '{area}' AND DATE(datetime_utc) = '{date}' ORDER BY datetime_utc ASC", engine)
     if not df.empty:
-        df['Time'] = pd.to_datetime(df['datetime_utc']).dt.strftime('%H:00')
+        # --- ADDED: The Timezone Conversion ---
+        utc_time = pd.to_datetime(df['datetime_utc']).dt.tz_localize('UTC')
+        dk_time = utc_time.dt.tz_convert('Europe/Copenhagen')
+        df['Time'] = dk_time.dt.strftime('%H:00')
+        
         c_map = {'BEST': '#10B981', 'CAUTION': '#F59E0B', 'AVOID': '#EF4444'}
         df['bar_color'] = df['recommendation_status'].map(c_map)
     return df
@@ -199,7 +206,9 @@ if date:
     fig.add_trace(go.Bar(x=df['Time'], y=df['price'], marker_color=df['bar_color'], opacity=0.4))
     fig.add_trace(go.Scatter(x=df['Time'], y=df['predicted_co2'], mode='lines', line=dict(color='#38BDF8', width=4, shape='spline'), yaxis='y2'))
     
-    cur_h = datetime.now().strftime('%H:00')
+    # --- ADDED: Danish Timezone for the Chart Line ---
+    dk_tz = pytz.timezone('Europe/Copenhagen')
+    cur_h = datetime.now(dk_tz).strftime('%H:00')
     if cur_h in df['Time'].values:
         fig.add_vline(x=cur_h, line_width=2, line_dash="dot", line_color="rgba(255,255,255,0.4)")
 
@@ -221,7 +230,9 @@ if date:
     })
 
     def highlight_and_bold(row):
-        cur_h = datetime.now().strftime('%H:00')
+        # --- ADDED: Danish Timezone for the Glowing Row ---
+        dk_tz = pytz.timezone('Europe/Copenhagen')
+        cur_h = datetime.now(dk_tz).strftime('%H:00')
         if row['Time'] == cur_h:
             # The Active "Seductive" Row: Deep cyan background with glowing cyan text
             return ['background-color: rgba(0, 209, 255, 0.1); font-weight: 900; color: #00D1FF;'] * len(row)
