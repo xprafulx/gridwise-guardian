@@ -10,6 +10,7 @@ prophet
 scikit-learn
 sqlalchemy
 psycopg2-binary
+pytz
 
 # MLOps & Monitoring
 mlflow
