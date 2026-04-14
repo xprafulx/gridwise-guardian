@@ -21,7 +21,7 @@ MODE = "TOMORROW"
 
 # 🕰️ DANISH TIMEZONE ALIGNMENT
 cph_now = pd.Timestamp.now(tz='Europe/Copenhagen')
-cph_now_floor = cph_now.floor('h') # Snaps exactly to the current hour (e.g., 20:00:00)
+cph_now_floor = cph_now.floor('h') 
 
 if MODE == "TODAY":
     TARGET_DATE_CPH = cph_now.normalize() 
@@ -32,23 +32,31 @@ print(f"🎯 MODE: {MODE} | Danish Day: {TARGET_DATE_CPH.strftime('%Y-%m-%d')}")
 print(f"🕒 Current Local Time: {cph_now_floor}")
 
 def get_dynamic_thresholds(area_name, engine):
-    query = f"""
+    # Minor Upgrade: Parameterized query to prevent SQL injection
+    query = text("""
         SELECT spot_price_dkk_kwh, co2_emissions_g_kwh 
         FROM processed_features 
-        WHERE price_area = '{area_name.upper()}' 
+        WHERE price_area = :area 
         AND is_forecast = FALSE
         AND datetime_utc >= CURRENT_DATE - INTERVAL '2 years'
-    """
+    """)
     try:
-        df = pd.read_sql(query, engine)
-        if df.empty: return {'p33_price': 0.5, 'p83_price': 2.0, 'p33_co2': 50, 'p83_co2': 150}
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params={"area": area_name.upper()})
+            
+        if df.empty: 
+            print(f"⚠️ Warning: DB empty. Using fallback thresholds for {area_name}")
+            return {'p33_price': 0.5, 'p83_price': 2.0, 'p33_co2': 50, 'p83_co2': 150}
+            
         return {
             'p33_price': float(df['spot_price_dkk_kwh'].quantile(0.33)),
             'p83_price': float(df['spot_price_dkk_kwh'].quantile(0.83)),
             'p33_co2': float(df['co2_emissions_g_kwh'].quantile(0.33)),
             'p83_co2': float(df['co2_emissions_g_kwh'].quantile(0.83))
         }
-    except: return {'p33_price': 0.5, 'p83_price': 2.0, 'p33_co2': 50, 'p83_co2': 150}
+    except Exception as e: 
+        print(f"⚠️ Threshold Error ({e}). Using fallbacks.")
+        return {'p33_price': 0.5, 'p83_price': 2.0, 'p33_co2': 50, 'p83_co2': 150}
 
 def download_model_from_neon(area_name):
     engine = get_db_connection()
@@ -61,12 +69,9 @@ def download_model_from_neon(area_name):
     return payload['model'], payload['features'], result[1]
 
 def fetch_realtime_co2_api(area_name, end_time_cph):
-    """Fetches exactly 168 hours of actual CO2 ending at end_time_cph"""
     print(f"📡 Fetching live CO2 history from API for {area_name} up to {end_time_cph.time()}...")
     url = "https://api.energidataservice.dk/dataset/CO2Emis"
-    
-    start_time_cph = end_time_cph - pd.Timedelta(days=8) # 8 days buffer to guarantee 168 hours
-    
+    start_time_cph = end_time_cph - pd.Timedelta(days=8)
     params = {
         "filter": json.dumps({"PriceArea": [area_name.upper()]}),
         "start": start_time_cph.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M'),
@@ -74,27 +79,18 @@ def fetch_realtime_co2_api(area_name, end_time_cph):
         "sort": "Minutes5UTC DESC",
         "limit": 10000
     }
-    
     try:
         res = requests.get(url, params=params, timeout=15)
         if res.status_code == 200:
             records = res.json().get('records', [])
             if not records: return None
-                
             df = pd.DataFrame(records)
             df['datetime_utc'] = pd.to_datetime(df['Minutes5UTC'], utc=True)
-            
-            # Resample 5-minute data into clean 1-hour blocks
             hourly = df.set_index('datetime_utc').resample('h').mean(numeric_only=True)['CO2Emission']
-            
-            # Lock to the exact end time and get last 168 hours
             end_time_utc = end_time_cph.tz_convert('UTC')
             hourly = hourly[hourly.index <= end_time_utc]
-            
-            # Fill any API gaps
             hourly = hourly.ffill().bfill() 
             history_list = hourly.tail(168).tolist()
-            
             if len(history_list) == 168:
                 return history_list
     except Exception as e:
@@ -108,23 +104,17 @@ def get_future_prices(area_name, start_cph, target_cph):
         "sort": "TimeUTC DESC",
         "limit": 400 
     }
-    
     try:
         res = requests.get(url, params=params, timeout=15)
         if res.status_code == 200:
             df = pd.DataFrame(res.json().get('records', []))
             df['datetime_utc'] = pd.to_datetime(df['TimeUTC'], utc=True)
             df['price_kwh'] = pd.to_numeric(df['DayAheadPriceDKK']) / 1000
-            
-            # We need prices from right NOW, to the end of TOMORROW
             start_utc = start_cph.tz_convert('UTC')
             end_utc = target_cph.tz_convert('UTC') + pd.Timedelta(days=1)
-            
             mask = (df['datetime_utc'] >= start_utc) & (df['datetime_utc'] < end_utc)
             df_filtered = df[mask]
-            
             if df_filtered.empty: return None
-                
             return df_filtered.set_index('datetime_utc').resample('h').mean(numeric_only=True)['price_kwh'].to_dict()
     except Exception as e:
         print(f"❌ Price API Error: {e}")
@@ -133,43 +123,39 @@ def get_future_prices(area_name, start_cph, target_cph):
 def generate_full_day_forecast(area_name, engine, target_cph):
     model, feature_names, db_version = download_model_from_neon(area_name)
     if model is None: return None
-    
     t = get_dynamic_thresholds(area_name, engine)
     
-    # 1. Get Live History up to 1 hour ago
     history_end_cph = cph_now_floor - pd.Timedelta(hours=1)
     history = fetch_realtime_co2_api(area_name, history_end_cph)
     
-    # Fallback to Database if API is down
     if not history:
         print("⚠️ API failed, falling back to database history...")
         query = f"SELECT datetime_utc, co2_emissions_g_kwh FROM processed_features WHERE price_area='{area_name.upper()}' AND is_forecast=FALSE ORDER BY datetime_utc DESC LIMIT 168"
         history = pd.read_sql(query, engine)['co2_emissions_g_kwh'].tolist()[::-1]
 
-    # 2. Get Prices from NOW to End of Tomorrow
     prices = get_future_prices(area_name, cph_now_floor, target_cph)
     if not prices: 
         print(f"⚠️ Missing price data. Skipping {area_name}.")
         return None
 
-    # 3. Get latest weather available from DB
     weather_query = f"SELECT wind_speed, solar_radiation FROM processed_features WHERE price_area='{area_name.upper()}' AND is_forecast=FALSE ORDER BY datetime_utc DESC LIMIT 1"
     last_weather = pd.read_sql(weather_query, engine).iloc[0]
     
     dk_holidays = holidays.Denmark()
     preds = []
 
-    # 4. Calculate exactly how many hours we need to predict
     end_of_tomorrow = target_cph + pd.Timedelta(hours=23)
     hours_to_predict = int((end_of_tomorrow - cph_now_floor).total_seconds() / 3600) + 1
-    
     print(f"🔄 Running Recursive Forecast for {hours_to_predict} hours...")
 
-    # 5. THE RECURSIVE LOOP
     for h in range(hours_to_predict):
         time_local = cph_now_floor + pd.Timedelta(hours=h)
         time_utc = time_local.tz_convert('UTC')
-        p = prices.get(time_utc, 0)
+        
+        # UPGRADE 1: Safe Price Fallback (Do NOT use 'continue' here!)
+        p = prices.get(time_utc, None)
+        if p is None:
+            p = (t['p33_price'] + t['p83_price']) / 2 # Assume average price if missing
         
         feats = {
             'spot_price_dkk_kwh': p, 'wind_speed': last_weather['wind_speed'],
@@ -183,12 +169,26 @@ def generate_full_day_forecast(area_name, engine, target_cph):
         }
         
         co2_pred = model.predict(pd.DataFrame([feats])[feature_names])[0]
+        co2_pred = max(0, co2_pred) # UPGRADE 2: Prevent negative predictions
         
-        # 6. THE SLICER: Only save it if it belongs to tomorrow (or today if MODE=TODAY)
         if time_local.date() == target_cph.date():
-            if (17 <= time_local.hour <= 21) or (p > t['p83_price']) or (co2_pred > t['p83_co2']):
+            # UPGRADE 3: The Blended Scoring System
+            price_norm = (p - t['p33_price']) / (t['p83_price'] - t['p33_price'] + 1e-6)
+            co2_norm = (co2_pred - t['p33_co2']) / (t['p83_co2'] - t['p33_co2'] + 1e-6)
+
+            price_norm = np.clip(price_norm, 0, 1.5)
+            co2_norm = np.clip(co2_norm, 0, 1.5)
+
+            # --- THE 70/30 GREENHOUR UPGRADE ---
+            score = 0.3 * price_norm + 0.7 * co2_norm
+            
+            # Penalize the cooking/evening peak gently
+            if 17 <= time_local.hour <= 21:
+                score += 0.2
+
+            if score > 0.75:
                 status = "AVOID"
-            elif (p < t['p33_price']) and (co2_pred < t['p33_co2']):
+            elif score < 0.3:
                 status = "BEST"
             else:
                 status = "CAUTION"
@@ -202,11 +202,18 @@ def generate_full_day_forecast(area_name, engine, target_cph):
                 'recommendation_status': status
             })
             
-        # Add the prediction to history so the next hour can use it as a "lag"
-        history.append(co2_pred)
+        # UPGRADE 4: Drift Anchor (Blends current prediction with recent history)
+        anchored_pred = 0.8 * co2_pred + 0.2 * np.mean(history[-24:])
+        history.append(anchored_pred)
 
     df = pd.DataFrame(preds)
-    df['should_charge'] = df['predicted_co2'] <= df['predicted_co2'].nsmallest(6).max()
+    
+    # UPGRADE 5: Foolproof 6-hour charging block
+    if not df.empty:
+        df['should_charge'] = False
+        best_indices = df.nsmallest(6, 'predicted_co2').index
+        df.loc[best_indices, 'should_charge'] = True
+        
     return df
 
 def run_job():
