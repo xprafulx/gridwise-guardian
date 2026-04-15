@@ -34,43 +34,35 @@ This project implements a complete, end-to-end MLOps lifecycle:
 
 ```mermaid
 flowchart TD
-    %% 1. Data Operations Phase
-    subgraph DataOps [Phase 1: Data Ingestion & Storage]
-        HF[Historical Data<br/>Hugging Face] --> Sync[Initial Setup<br/><i>sync_data.py</i>]
-        API[Energi Data Service APIs] --> Ingest[Daily Ingestion<br/><i>ingest_job.py</i><br/>CRON 01:00]
-    end
+    %% External Data Sources
+    HF[Historical Data<br/>Hugging Face Dataset] --> Sync
+    API[Energi Data Service APIs] --> Ingest
 
-    DB[(Neon PostgreSQL<br/>Central Database)]
-    Sync --> DB
-    Ingest --> DB
+    %% Initial Setup
+    Sync[Initial Setup<br/><i>sync_data.py</i>] --> DB[(Neon PostgreSQL<br/>Central Database)]
 
-    %% 2. Evaluation Phase
-    subgraph EvalOps [Phase 2: Continuous Auditing]
-        Eval[Model Evaluation<br/><i>evaluate_job.py</i><br/>CRON 02:00]
-    end
-    
-    DB --> Eval
+    %% 1. Ingestion Job
+    CRON1((CRON 01:00<br/><i>daily_ingest.yml</i>)) -->|Triggers| Ingest
+    Ingest[Daily Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB
+
+    %% 2. Evaluation Job
+    CRON2((CRON 02:00<br/><i>daily_evaluate.yml</i>)) -->|Triggers| Eval
+    DB --> Eval[Model Evaluation<br/><i>evaluate_job.py</i><br/>Calculates Evidently Drift]
     Eval -. Saves Metrics .-> DB
 
-    %% 3. Machine Learning Phase
-    subgraph MLOps [Phase 3: Machine Learning Engine]
-        Train[Model Retraining<br/><i>train_job.py</i><br/>CRON 03:00 Sun]
-        Predict[Daily Forecasting<br/><i>predict_job.py</i><br/>CRON 20:00]
-    end
-
-    Eval -->|If Drift > 0.3 Triggers| Train
-    DB --> Train
+    %% 3. Training Job
+    CRON3((CRON 03:00 Sun<br/><i>weekly_train.yml</i>)) -->|Triggers| Train
+    Eval -->|Drift > 0.3| Train
+    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Trains XGBoost]
     Train -. Saves New Model .-> DB
-    
-    DB --> Predict
-    Predict -. Saves Forecast .-> DB
 
-    %% 4. Serving Phase
-    subgraph Serving [Phase 4: Serving & Frontend]
-        Predict --> Export[Orchestrator<br/><i>run_forecast.py</i>]
-        Export --> JSON[/docs/latest_forecast.json/]
-        JSON --> UI[Streamlit UI<br/><i>app.py</i><br/>Interactive Dashboard]
-    end
+    %% 4. Prediction Job & Export (The Orchestrator)
+    CRON4((CRON 20:00<br/><i>daily_predict.yml</i>)) -->|Triggers| RunForecast
+    RunForecast[Orchestrator<br/><i>run_forecast.py</i>] -->|1. Predicts Data| Predict
+    Predict[<i>predict_job.py</i><br/>Tomorrow's CO2 & 70/30 Split] -. Saves Forecast .-> DB
+    RunForecast -->|2. Stores Data| JSON[/docs/latest_forecast.json/]
+    
+    JSON --> UI[Streamlit Frontend<br/><i>app.py</i><br/>Interactive Dashboard]
 ```
 ---
 
