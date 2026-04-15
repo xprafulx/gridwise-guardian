@@ -35,11 +35,15 @@ This project implements a complete, end-to-end MLOps lifecycle:
 ```mermaid
 flowchart TD
     %% External Data Sources
+    HF[Hugging Face Dataset] --> Sync
     API[Energi Data Service APIs] --> Ingest
+
+    %% 0. Initial Setup (The Bootstrap)
+    Sync[Initial Data Sync<br/><i>sync_data.py</i><br/>Loads Historical Data] --> DB[(Neon PostgreSQL<br/>Central Database)]
 
     %% 1. Ingestion Job
     CRON1((CRON 01:00<br/><i>ingest.yml</i>)) -->|Triggers| Ingest
-    Ingest[Data Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB[(Neon PostgreSQL)]
+    Ingest[Daily Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB
 
     %% 2. Evaluation Job
     CRON2((CRON 02:00<br/><i>evaluate.yml</i>)) -->|Triggers| Eval
@@ -49,12 +53,12 @@ flowchart TD
     %% 3. Training Job
     CRON3((CRON 03:00 Sun<br/><i>train.yml</i>)) -->|Triggers| Train
     Eval -->|Drift > 0.3| Train
-    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Trains XGBoost]
+    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Trains XGBoost & Features]
     Train -. Saves New Model .-> DB
 
     %% 4. Prediction Job
     CRON4((CRON 20:00<br/><i>predict.yml</i>)) -->|Triggers| Predict
-    DB --> Predict[Daily Forecasting<br/><i>predict_job.py</i><br/>Predicts Tomorrow's CO2]
+    DB --> Predict[Daily Forecasting<br/><i>predict_job.py</i><br/>Predicts Tomorrow's CO2 & 70/30 Split]
     Predict -. Saves Forecast .-> DB
 
     %% Export and Frontend Delivery
@@ -105,12 +109,12 @@ Create a `.env` file in the root directory and add your Neon PostgreSQL connecti
 ### 2. Run the Pipeline
 We use Docker to ensure the environment runs perfectly on any machine.
 
-# Build and spin up the containers
+#### Build and spin up the containers
 ```bash
 docker-compose up -d --build
 ```
 
-# Shut containers down
+#### Shut containers down
 ```bash
 docker-compose down
 ```
