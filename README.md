@@ -32,6 +32,29 @@ This project implements a complete, end-to-end MLOps lifecycle:
 11. **User Interface (`app.py`):** A Streamlit application rendering the dark-mode recommendation dashboard.
 12. **Containerization (`docker-compose.yml`):** Packages the entire environment for reproducible execution.
 
+```mermaid
+flowchart TD
+    %% External Data Sources
+    API[Energi Data Service APIs] --> Ingest
+    HF[Hugging Face Dataset] --> Ingest
+
+    %% Data Ingestion
+    Ingest[Data Ingestion<br/><i>sync_data.py & ingest_job.py</i>] --> DB[(Neon PostgreSQL<br/>Central Database)]
+
+    %% Machine Learning Pipeline
+    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Train XGBoost & Feature Engineering]
+    Train -. Saves Models .-> DB
+
+    DB --> Predict[Daily Forecasting<br/><i>predict_job.py</i><br/>Predict CO2 & 70/30 Recommendation]
+    Predict -. Saves Forecast .-> DB
+
+    %% CI/CD and Frontend Delivery
+    Predict --> Export[GitHub Actions CI/CD<br/><i>run_forecast.py</i><br/>Trigger Job & Export Data]
+    Export --> JSON[/docs/latest_forecast.json/]
+    
+    JSON --> UI[Streamlit Frontend<br/><i>app.py</i><br/>Interactive Dashboard]
+```
+
 ---
 
 ## Repository Structure
