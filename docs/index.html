@@ -199,7 +199,6 @@
 
         // --- 1. FETCH DATA (Robust Pathing) ---
         async function fetchRealData() {
-            // Try both possible paths for GitHub Pages
             const paths = ['docs/latest_forecast.json', 'latest_forecast.json'];
             
             for (const path of paths) {
@@ -209,14 +208,13 @@
                         globalData = await response.json();
                         console.log(`✅ Data loaded from: ${path}`, globalData);
                         updateDashboard();
-                        return; // Stop trying once successful
+                        return;
                     }
                 } catch (error) {
                     console.warn(`Attempted ${path} but failed.`);
                 }
             }
             
-            // If both fail, update UI to reflect the error
             console.error("❌ Could not find JSON file at any path.");
             document.getElementById("dashboardTitle").innerText = "ERROR: MLOps Data Not Found";
         }
@@ -229,7 +227,6 @@
             const now = new Date();
             const currentHourStr = now.getHours().toString().padStart(2, '0') + ":00";
             
-            // 🔥 Force Title Update Immediately
             document.getElementById("dashboardTitle").innerText = `${region} Strategy | Active AI Forecast`;
 
             const regionData = globalData.forecast.filter(d => d.region === region);
@@ -245,9 +242,9 @@
 
             regionData.forEach((row, i) => {
                 xVals.push(row.time);
-                co2Data.push(row.co2);
-                priceData.push(row.price);
-                sumCo2 += row.co2;
+                co2Data.push(parseFloat(row.co2)); // Ensure it's treated as a number
+                priceData.push(parseFloat(row.price)); // Ensure it's treated as a number
+                sumCo2 += parseFloat(row.co2);
 
                 if (row.co2 < bestVal) { bestVal = row.co2; bestIdx = i; }
                 if (row.co2 > worstVal) { worstVal = row.co2; worstIdx = i; }
@@ -257,7 +254,7 @@
                 statuses.push({ text: row.status, color: statusColor, type: row.status });
             });
 
-            // 🔥 Update KPI Cards (Force update regardless of 'current time')
+            // Update KPI Cards
             document.getElementById("kpiBestTime").innerText = xVals[bestIdx];
             document.getElementById("kpiBestCo2").innerText = `${bestVal.toFixed(1)}g CO2`;
             document.getElementById("kpiWorstTime").innerText = xVals[worstIdx];
@@ -277,8 +274,8 @@
                 tableHTML += `
                     <tr ${rowClass}>
                         <td>${timeLabel}</td>
-                        <td>${row.price.toFixed(3)}</td>
-                        <td>${row.co2.toFixed(1)}</td>
+                        <td>${parseFloat(row.price).toFixed(3)}</td>
+                        <td>${parseFloat(row.co2).toFixed(1)}</td>
                         <td style="font-weight: 700; color: ${statuses[i].color}">${statuses[i].text}</td>
                     </tr>
                 `;
@@ -290,29 +287,65 @@
             });
             tbody.innerHTML = tableHTML;
 
-            // 🔥 THE FIX: If 'NOW' isn't found, use the latest available status instead of hiding data
             if (!foundCurrent && statuses.length > 0) {
-                const latestStatus = statuses[statuses.length - 1]; // Grab the last status in the array
+                const latestStatus = statuses[statuses.length - 1]; 
                 updateSidebar(latestStatus);
                 document.getElementById("tickerStatus").innerText = "SYNCED (STALE DATA)";
             }
 
-            // Update Chart
-            const traceBars = { x: xVals, y: priceData, type: 'bar', marker: { color: barColors, opacity: 0.2 }, yaxis: 'y1' };
-            const traceLine = { x: xVals, y: co2Data, type: 'scatter', mode: 'lines', line: {color: '#38BDF8', width: 3, shape: 'spline'}, yaxis: 'y2' };
+            // --- PLOTLY CHART FIX ---
+            const traceBars = { 
+                x: xVals, 
+                y: priceData, 
+                type: 'bar', 
+                marker: { color: barColors, opacity: 0.6 }, // Increased opacity slightly for visibility
+                yaxis: 'y1',
+                name: 'Price'
+            };
+            
+            const traceLine = { 
+                x: xVals, 
+                y: co2Data, 
+                type: 'scatter', 
+                mode: 'lines+markers', // Added markers to see exactly where data points hit
+                line: {color: '#38BDF8', width: 3, shape: 'spline'}, 
+                marker: {size: 6, color: '#38BDF8'},
+                yaxis: 'y2',
+                name: 'CO2'
+            };
             
             const layout = {
-                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-                font: { color: '#F1F5F9', family: 'Outfit' }, margin: { l: 50, r: 50, t: 10, b: 30 },
-                showlegend: false, barmode: 'overlay',
-                xaxis: { showgrid: false, zeroline: false },
-                yaxis: { showgrid: false, zeroline: false, title: 'Price (DKK)' },
-                yaxis2: { showgrid: false, zeroline: false, overlaying: 'y', side: 'right', title: 'CO2 (g)' }
+                paper_bgcolor: 'rgba(0,0,0,0)', 
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#F1F5F9', family: 'Outfit' }, 
+                margin: { l: 50, r: 50, t: 30, b: 50 }, // Added padding so axes don't clip
+                showlegend: false, 
+                barmode: 'group', // Prevents weird stacking behavior
+                xaxis: { 
+                    type: 'category', // FORCE Plotly to treat "HH:00" strings as categories, keeping them in exact order
+                    showgrid: false, 
+                    zeroline: false,
+                    tickangle: -45 // Angle text so times don't overlap
+                },
+                yaxis: { 
+                    showgrid: false, 
+                    zeroline: false, 
+                    title: 'Price (DKK)',
+                    rangemode: 'tozero' // Ensure bars start at the bottom
+                },
+                yaxis2: { 
+                    showgrid: true, // Show gridlines for the CO2 line to make it easier to read
+                    gridcolor: 'rgba(255,255,255,0.05)',
+                    zeroline: false, 
+                    overlaying: 'y', 
+                    side: 'right', 
+                    title: 'CO2 Intensity (g)',
+                    rangemode: 'tozero'
+                }
             };
             Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
         }
 
-        // Helper function for Sidebar
         function updateSidebar(status) {
             document.getElementById("centerDot").setAttribute("fill", status.color);
             document.getElementById("centerGlow").setAttribute("fill", status.color);
@@ -321,7 +354,7 @@
             document.getElementById("tickerMsg").innerText = `${status.type} WINDOW ACTIVE`;
         }
 
-        // --- 3. CLOCK ANIMATION (No changes here) ---
+        // --- 3. CLOCK ANIMATION ---
         const g = document.getElementById('marks');
         for (let i=0; i<12; i++) {
             const a = (i*30)*(Math.PI/180);
