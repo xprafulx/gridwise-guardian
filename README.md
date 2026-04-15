@@ -36,24 +36,42 @@ This project implements a complete, end-to-end MLOps lifecycle:
 flowchart TD
     %% External Data Sources
     API[Energi Data Service APIs] --> Ingest
-    HF[Hugging Face Dataset] --> Ingest
 
-    %% Data Ingestion
-    Ingest[Data Ingestion<br/><i>sync_data.py & ingest_job.py</i>] --> DB[(Neon PostgreSQL<br/>Central Database)]
+    %% 1. Ingestion Job
+    CRON1((CRON 01:00<br/><i>ingest.yml</i>)) -->|Triggers| Ingest
+    Ingest[Data Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB[(Neon PostgreSQL)]
 
-    %% Machine Learning Pipeline
-    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Train XGBoost & Feature Engineering]
-    Train -. Saves Models .-> DB
+    %% 2. Evaluation Job
+    CRON2((CRON 02:00<br/><i>evaluate.yml</i>)) -->|Triggers| Eval
+    DB --> Eval[Model Evaluation<br/><i>evaluate_job.py</i><br/>Calculates Evidently Drift]
+    Eval -. Saves Metrics .-> DB
 
-    DB --> Predict[Daily Forecasting<br/><i>predict_job.py</i><br/>Predict CO2 & 70/30 Recommendation]
+    %% 3. Training Job
+    CRON3((CRON 03:00 Sun<br/><i>train.yml</i>)) -->|Triggers| Train
+    Eval -->|Drift > 0.3| Train
+    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Trains XGBoost]
+    Train -. Saves New Model .-> DB
+
+    %% 4. Prediction Job
+    CRON4((CRON 20:00<br/><i>predict.yml</i>)) -->|Triggers| Predict
+    DB --> Predict[Daily Forecasting<br/><i>predict_job.py</i><br/>Predicts Tomorrow's CO2]
     Predict -. Saves Forecast .-> DB
 
-    %% CI/CD and Frontend Delivery
-    Predict --> Export[GitHub Actions CI/CD<br/><i>run_forecast.py</i><br/>Trigger Job & Export Data]
+    %% Export and Frontend Delivery
+    Predict --> Export[Export Data<br/><i>run_forecast.py</i>]
     Export --> JSON[/docs/latest_forecast.json/]
     
     JSON --> UI[Streamlit Frontend<br/><i>app.py</i><br/>Interactive Dashboard]
 ```
+---
+
+## Zero-Touch Automation (4-Stage CI/CD)
+A core component of this MLOps architecture is the complete decoupling of pipeline stages. To ensure fault tolerance, the system uses four separate GitHub Actions workflows running on independent CRON schedules:
+
+1. **The Ingestion Shift (`daily_ingest.yml` at 01:00):** Wakes up to securely pull the previous day's finalized weather, price, and actual CO2 data from the APIs and syncs it to Neon.
+2. **The Auditor (`daily_evaluate.yml` at 02:00):** Compares the actual CO2 data from yesterday against the pipeline's predictions. It calculates error metrics and monitors data drift using Evidently AI.
+3. **The Retrainer (`weekly_train.yml` at 03:00, Sundays):** Runs weekly to retrain the XGBoost models on the freshest data. It is also configured to trigger automatically if the Auditor detects an Evidently drift score exceeding `0.3`.
+4. **The Forecaster (`daily_predict.yml` at 20:00):** Generates the final 70/30 scoring strategy for tomorrow's EV charging, updates the database, and pushes the new `latest_forecast.json` file directly to the frontend.
 
 ---
 
