@@ -35,7 +35,7 @@ This project implements a complete, end-to-end MLOps lifecycle:
 ---
 
 ## Repository Structure
-
+```text
 .
 ├── data/                  # Raw and processed CSV datasets
 ├── docs/                  # Static API JSON and GitHub Pages HTML
@@ -51,6 +51,7 @@ This project implements a complete, end-to-end MLOps lifecycle:
 ├── Dockerfile             # Image definition
 ├── requirements.txt       # Python dependencies
 └── run_forecast.py        # Pipeline trigger and JSON exporter
+```
 
 ## 🚀 Quickstart & Local Setup
 
