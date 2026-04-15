@@ -62,7 +62,7 @@ Create a `.env` file in the root directory and add your Neon PostgreSQL connecti
 
 ### 2. Run the Pipeline
 We use Docker to ensure the environment runs perfectly on any machine.
-```bash
+
 # Build and spin up the containers
 docker-compose up -d --build
 
@@ -71,7 +71,7 @@ docker-compose down
 
 ### 3. Launch the Dashboard
 To view the Streamlit interface locally:
-```bash
+
 streamlit run src/frontend/app.py
 
 ---
