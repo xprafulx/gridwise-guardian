@@ -39,30 +39,30 @@ flowchart TD
     API[Energi Data Service APIs] --> Ingest
 
     %% Initial Setup
-    Sync[STEP 1: Initial Setup<br/><i>sync_data.py</i>] --> DB[(Neon PostgreSQL<br/>Central Database)]
+    Sync[Initial Setup<br/><i>sync_data.py</i>] --> DB[(Neon PostgreSQL<br/>Central Database)]
 
     %% 1. Ingestion Job
     CRON1((CRON 01:00<br/><i>daily_ingest.yml</i>)) -->|Triggers| Ingest
-    Ingest[STEP 2: Daily Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB
+    Ingest[Daily Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB
 
     %% 2. Evaluation Job
     CRON2((CRON 02:00<br/><i>daily_evaluate.yml</i>)) -->|Triggers| Eval
-    DB --> Eval[STEP 3: Model Evaluation<br/><i>evaluate_job.py</i><br/>Calculates Evidently Drift]
+    DB --> Eval[Model Evaluation<br/><i>evaluate_job.py</i><br/>Calculates Evidently Drift]
     Eval -. Saves Metrics .-> DB
 
     %% 3. Training Job
     CRON3((CRON 03:00 Sun<br/><i>weekly_train.yml</i>)) -->|Triggers| Train
     Eval -->|Drift > 0.3| Train
-    DB --> Train[STEP 4: Model Training<br/><i>train_job.py</i><br/>Trains XGBoost]
+    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Trains XGBoost]
     Train -. Saves New Model .-> DB
 
     %% 4. Prediction Job & Export (The Orchestrator)
     CRON4((CRON 20:00<br/><i>daily_predict.yml</i>)) -->|Triggers| RunForecast
-    RunForecast[STEP 5: Orchestrator<br/><i>run_forecast.py</i>] -->|1. Cooks Data| Predict
+    RunForecast[Orchestrator<br/><i>run_forecast.py</i>] -->|1. Cooks Data| Predict
     Predict[<i>predict_job.py</i><br/>Tomorrow's CO2 & 70/30 Split] -. Saves Forecast .-> DB
     RunForecast -->|2. Boxes Data| JSON[/docs/latest_forecast.json/]
     
-    JSON --> UI[STEP 6: Streamlit Frontend<br/><i>app.py</i><br/>Interactive Dashboard]
+    JSON --> UI[Streamlit Frontend<br/><i>app.py</i><br/>Interactive Dashboard]
 ```
 ---
 
