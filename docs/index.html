@@ -197,40 +197,46 @@
     <script>
         let globalData = null;
 
-        // --- 1. FETCH DATA (Using the correct path for GitHub Pages) ---
+        // --- 1. FETCH THE DATA ---
         async function fetchRealData() {
             try {
-                // Ensure this path matches your repo structure exactly
+                // Ensure path is 'docs/latest_forecast.json' if that's where your action pushes it
                 const response = await fetch('docs/latest_forecast.json');
-                if (!response.ok) throw new Error("JSON file missing");
+                if (!response.ok) throw new Error("JSON file not found on server");
                 
                 globalData = await response.json();
-                console.log("MLOps Data Loaded:", globalData);
-                updateDashboard();
+                console.log("Success: Data loaded from JSON", globalData);
+                
+                // If we get data, clear the "Awaiting" message immediately
+                document.getElementById("dashboardTitle").innerText = "SYNC COMPLETE";
+                updateDashboard(); 
             } catch (error) {
-                console.error("Dashboard Sync Error:", error);
+                console.error("Fetch failed:", error);
                 document.getElementById("dashboardTitle").innerText = "AWAITING 20:00 FORECAST SYNC...";
             }
         }
 
-        // --- 2. UPDATE UI ---
+        // --- 2. UPDATE THE UI ---
         function updateDashboard() {
-            if (!globalData) return;
+            if (!globalData || !globalData.forecast) return;
 
             const region = document.getElementById("regionSelect").value;
             const now = new Date();
-            // Match the "HH:00" format in your Python JSON
             const currentHourStr = now.getHours().toString().padStart(2, '0') + ":00";
             
-            document.getElementById("dashboardTitle").innerText = `${region} Strategy | Live AI Forecast`;
+            document.getElementById("dashboardTitle").innerText = `${region} Strategy | Active AI Forecast`;
 
+            // Filter for region
             const regionData = globalData.forecast.filter(d => d.region === region);
-            if (regionData.length === 0) return;
+            if (regionData.length === 0) {
+                console.warn("Region not found in data");
+                return;
+            }
 
             const colorMap = { 'BEST': '#10B981', 'CAUTION': '#F59E0B', 'AVOID': '#EF4444' };
 
             let xVals = [], co2Data = [], priceData = [], barColors = [], statuses = [];
-            let bestVal = 999, bestIdx = 0, worstVal = -999, worstIdx = 0, sumCo2 = 0;
+            let bestVal = 9999, bestIdx = 0, worstVal = -9999, worstIdx = 0, sumCo2 = 0;
 
             regionData.forEach((row, i) => {
                 xVals.push(row.time);
@@ -241,21 +247,23 @@
                 if (row.co2 < bestVal) { bestVal = row.co2; bestIdx = i; }
                 if (row.co2 > worstVal) { worstVal = row.co2; worstIdx = i; }
 
-                const color = colorMap[row.status] || '#475569';
-                barColors.push(color);
-                statuses.push({ text: row.status, color: color, type: row.status });
+                const statusColor = colorMap[row.status] || '#475569';
+                barColors.push(statusColor);
+                statuses.push({ text: row.status, color: statusColor, type: row.status });
             });
 
-            // Update Header KPIs
+            // Update KPI Cards
             document.getElementById("kpiBestTime").innerText = xVals[bestIdx];
-            document.getElementById("kpiBestCo2").innerText = `${bestVal}g CO2`;
+            document.getElementById("kpiBestCo2").innerText = `${bestVal.toFixed(1)}g CO2`;
             document.getElementById("kpiWorstTime").innerText = xVals[worstIdx];
-            document.getElementById("kpiWorstCo2").innerText = `${worstVal}g CO2`;
+            document.getElementById("kpiWorstCo2").innerText = `${worstVal.toFixed(1)}g CO2`;
             document.getElementById("kpiMean").innerText = `${(sumCo2/regionData.length).toFixed(1)}g`;
 
-            // Update Table
+            // Update Table & Find "Now" row
             const tbody = document.getElementById('dataTableBody');
             let tableHTML = '';
+            let foundCurrent = false;
+
             regionData.forEach((row, i) => {
                 const isCurrent = (row.time === currentHourStr);
                 const rowClass = isCurrent ? 'class="highlight-row"' : '';
@@ -270,8 +278,9 @@
                     </tr>
                 `;
 
-                // Update Sidebar Sync Status based on current hour
+                // Update Clock / Sidebar Status if matching current hour
                 if (isCurrent) {
+                    foundCurrent = true;
                     document.getElementById("centerDot").setAttribute("fill", statuses[i].color);
                     document.getElementById("centerGlow").setAttribute("fill", statuses[i].color);
                     document.getElementById("tickerStatus").innerText = `${statuses[i].type} NOW`;
@@ -281,13 +290,19 @@
             });
             tbody.innerHTML = tableHTML;
 
+            // Fallback if current hour isn't in JSON (e.g. stale data)
+            if (!foundCurrent) {
+                document.getElementById("tickerStatus").innerText = "SYNCING...";
+                document.getElementById("tickerMsg").innerText = "AWAITING MLOPS DATA";
+            }
+
             // Update Chart
-            const traceBars = { x: xVals, y: priceData, type: 'bar', marker: { color: barColors, opacity: 0.3 }, yaxis: 'y1' };
+            const traceBars = { x: xVals, y: priceData, type: 'bar', marker: { color: barColors, opacity: 0.2 }, yaxis: 'y1' };
             const traceLine = { x: xVals, y: co2Data, type: 'scatter', mode: 'lines', line: {color: '#38BDF8', width: 3, shape: 'spline'}, yaxis: 'y2' };
             
             const layout = {
                 paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-                font: { color: '#F1F5F9', family: 'Outfit' }, margin: { l: 40, r: 40, t: 10, b: 40 },
+                font: { color: '#F1F5F9', family: 'Outfit' }, margin: { l: 50, r: 50, t: 10, b: 30 },
                 showlegend: false, barmode: 'overlay',
                 xaxis: { showgrid: false, zeroline: false },
                 yaxis: { showgrid: false, zeroline: false, title: 'Price (DKK)' },
@@ -296,7 +311,7 @@
             Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
         }
 
-        // --- 3. CLOCK LOGIC ---
+        // --- 3. CLOCK ANIMATION ---
         const g = document.getElementById('marks');
         for (let i=0; i<12; i++) {
             const a = (i*30)*(Math.PI/180);
@@ -318,7 +333,7 @@
         }
         setInterval(tick, 1000); tick();
 
-        // Boot the system
+        // Boot system
         fetchRealData();
     </script>
 </body>
