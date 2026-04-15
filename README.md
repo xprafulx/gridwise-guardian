@@ -126,7 +126,8 @@ docker run -p 8501:8501 prafulz/greenhour-guardian-app:latest
 Use this method if you want to modify the code or spin up the entire pipeline architecture.
 
 ```bash
-## 1. Clone this repository and navigate into the folder
+# 1. Clone this repository and navigate into the folder
+
 # 2. Build and spin up the containers in the background
 docker-compose up -d --build
 
