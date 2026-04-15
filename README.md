@@ -35,7 +35,7 @@ This project implements a complete, end-to-end MLOps lifecycle:
 ---
 
 ## Repository Structure
-```text
+
 .
 ├── data/                  # Raw and processed CSV datasets
 ├── docs/                  # Static API JSON and GitHub Pages HTML
