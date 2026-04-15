@@ -103,16 +103,35 @@ Create a `.env` file in the root directory and add your Neon PostgreSQL connecti
 * **Format:** `DATABASE_URL=postgresql://[user]:[password]@[endpoint_hostname]/[dbname]?sslmode=require`
 * **Example:** `DATABASE_URL=postgresql://neondb_owner:MySecretPass123@ep-cool-sun-12345.eu-central-1.aws.neon.tech/neondb?sslmode=require`
 
-### 2. Run the Pipeline
-We use Docker to ensure the environment runs perfectly on any machine.
+## How to Run the Project
 
-#### Build and spin up the containers
+You have two options to run the Greenhour Guardian locally, depending on your needs.
+
+### Option A: Quick Start (Pre-built Image)
+The fastest way to view the dashboard without downloading the source code.
+
 ```bash
-docker-compose up -d --build
+# 1. Pull the pre-built image from Docker Hub
+docker pull prafulz/greenhour-guardian-app:latest
+```
+```bash
+# 2. Run the container
+docker run -p 8501:8501 prafulz/greenhour-guardian-app:latest
 ```
 
-#### Shut containers down
+
+### Option B: Build from Source (Developer Mode)
+Use this method if you want to modify the code or spin up the entire pipeline architecture.
+
 ```bash
+## 1. Clone this repository and navigate into the folder
+# 2. Build and spin up the containers in the background
+docker-compose up -d --build
+
+# To view live logs:
+docker-compose logs -f
+
+# To shut down the pipeline:
 docker-compose down
 ```
 
