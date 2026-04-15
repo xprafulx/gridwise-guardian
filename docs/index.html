@@ -197,23 +197,28 @@
     <script>
         let globalData = null;
 
-        // --- 1. FETCH THE DATA ---
+        // --- 1. FETCH DATA (Robust Pathing) ---
         async function fetchRealData() {
-            try {
-                // Ensure path is 'docs/latest_forecast.json' if that's where your action pushes it
-                const response = await fetch('docs/latest_forecast.json');
-                if (!response.ok) throw new Error("JSON file not found on server");
-                
-                globalData = await response.json();
-                console.log("Success: Data loaded from JSON", globalData);
-                
-                // If we get data, clear the "Awaiting" message immediately
-                document.getElementById("dashboardTitle").innerText = "SYNC COMPLETE";
-                updateDashboard(); 
-            } catch (error) {
-                console.error("Fetch failed:", error);
-                document.getElementById("dashboardTitle").innerText = "AWAITING 20:00 FORECAST SYNC...";
+            // Try both possible paths for GitHub Pages
+            const paths = ['docs/latest_forecast.json', 'latest_forecast.json'];
+            
+            for (const path of paths) {
+                try {
+                    const response = await fetch(path);
+                    if (response.ok) {
+                        globalData = await response.json();
+                        console.log(`✅ Data loaded from: ${path}`, globalData);
+                        updateDashboard();
+                        return; // Stop trying once successful
+                    }
+                } catch (error) {
+                    console.warn(`Attempted ${path} but failed.`);
+                }
             }
+            
+            // If both fail, update UI to reflect the error
+            console.error("❌ Could not find JSON file at any path.");
+            document.getElementById("dashboardTitle").innerText = "ERROR: MLOps Data Not Found";
         }
 
         // --- 2. UPDATE THE UI ---
@@ -224,12 +229,12 @@
             const now = new Date();
             const currentHourStr = now.getHours().toString().padStart(2, '0') + ":00";
             
+            // 🔥 Force Title Update Immediately
             document.getElementById("dashboardTitle").innerText = `${region} Strategy | Active AI Forecast`;
 
-            // Filter for region
             const regionData = globalData.forecast.filter(d => d.region === region);
             if (regionData.length === 0) {
-                console.warn("Region not found in data");
+                console.warn(`No data found for region: ${region}`);
                 return;
             }
 
@@ -252,14 +257,14 @@
                 statuses.push({ text: row.status, color: statusColor, type: row.status });
             });
 
-            // Update KPI Cards
+            // 🔥 Update KPI Cards (Force update regardless of 'current time')
             document.getElementById("kpiBestTime").innerText = xVals[bestIdx];
             document.getElementById("kpiBestCo2").innerText = `${bestVal.toFixed(1)}g CO2`;
             document.getElementById("kpiWorstTime").innerText = xVals[worstIdx];
             document.getElementById("kpiWorstCo2").innerText = `${worstVal.toFixed(1)}g CO2`;
             document.getElementById("kpiMean").innerText = `${(sumCo2/regionData.length).toFixed(1)}g`;
 
-            // Update Table & Find "Now" row
+            // Update Table
             const tbody = document.getElementById('dataTableBody');
             let tableHTML = '';
             let foundCurrent = false;
@@ -278,22 +283,18 @@
                     </tr>
                 `;
 
-                // Update Clock / Sidebar Status if matching current hour
                 if (isCurrent) {
                     foundCurrent = true;
-                    document.getElementById("centerDot").setAttribute("fill", statuses[i].color);
-                    document.getElementById("centerGlow").setAttribute("fill", statuses[i].color);
-                    document.getElementById("tickerStatus").innerText = `${statuses[i].type} NOW`;
-                    document.getElementById("tickerStatus").style.color = statuses[i].color;
-                    document.getElementById("tickerMsg").innerText = `${statuses[i].type} WINDOW ACTIVE`;
+                    updateSidebar(statuses[i]);
                 }
             });
             tbody.innerHTML = tableHTML;
 
-            // Fallback if current hour isn't in JSON (e.g. stale data)
-            if (!foundCurrent) {
-                document.getElementById("tickerStatus").innerText = "SYNCING...";
-                document.getElementById("tickerMsg").innerText = "AWAITING MLOPS DATA";
+            // 🔥 THE FIX: If 'NOW' isn't found, use the latest available status instead of hiding data
+            if (!foundCurrent && statuses.length > 0) {
+                const latestStatus = statuses[statuses.length - 1]; // Grab the last status in the array
+                updateSidebar(latestStatus);
+                document.getElementById("tickerStatus").innerText = "SYNCED (STALE DATA)";
             }
 
             // Update Chart
@@ -311,7 +312,16 @@
             Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
         }
 
-        // --- 3. CLOCK ANIMATION ---
+        // Helper function for Sidebar
+        function updateSidebar(status) {
+            document.getElementById("centerDot").setAttribute("fill", status.color);
+            document.getElementById("centerGlow").setAttribute("fill", status.color);
+            document.getElementById("tickerStatus").innerText = `${status.type} NOW`;
+            document.getElementById("tickerStatus").style.color = status.color;
+            document.getElementById("tickerMsg").innerText = `${status.type} WINDOW ACTIVE`;
+        }
+
+        // --- 3. CLOCK ANIMATION (No changes here) ---
         const g = document.getElementById('marks');
         for (let i=0; i<12; i++) {
             const a = (i*30)*(Math.PI/180);
