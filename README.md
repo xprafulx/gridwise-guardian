@@ -1,5 +1,7 @@
 # Greenhour Guardian: Smart EV Charging Pipeline
 
+[![Live Dashboard](https://img.shields.io/badge/Live_Dashboard-app--greenhour.cloud.sdu.dk-10B981?style=for-the-badge&logo=streamlit)](https://app-greenhour.cloud.sdu.dk)
+
 > An intelligent MLOps pipeline actively predicting the Danish grid's "dirty hours" to find the optimal window for EV charging.
 
 ## Our Mission: Protecting the Grid's Darkest Hours
