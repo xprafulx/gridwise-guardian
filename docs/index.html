@@ -77,7 +77,6 @@
             outline: none;
             cursor: pointer;
             appearance: none;
-            -webkit-appearance: none;
         }
         select option { background: #05070A; color: #fff; }
 
@@ -196,48 +195,43 @@
     </main>
 
     <script>
-        let globalData = null; // This will hold your real JSON data
+        let globalData = null;
 
-        // --- 1. FETCH THE REAL DATA FROM YOUR ACTION ---
+        // --- 1. FETCH DATA (Using the correct path for GitHub Pages) ---
         async function fetchRealData() {
             try {
-                const response = await fetch('latest_forecast.json');
+                // Ensure this path matches your repo structure exactly
+                const response = await fetch('docs/latest_forecast.json');
+                if (!response.ok) throw new Error("JSON file missing");
+                
                 globalData = await response.json();
-                updateDashboard(); // Paint the screen once data loads
+                console.log("MLOps Data Loaded:", globalData);
+                updateDashboard();
             } catch (error) {
-                console.error("Waiting for tonight's Action to run...", error);
+                console.error("Dashboard Sync Error:", error);
                 document.getElementById("dashboardTitle").innerText = "AWAITING 20:00 FORECAST SYNC...";
             }
         }
 
-        // --- 2. PAINT THE DASHBOARD WITH REAL DATA ---
+        // --- 2. UPDATE UI ---
         function updateDashboard() {
             if (!globalData) return;
 
             const region = document.getElementById("regionSelect").value;
-            const currentHour = new Date().getHours();
+            const now = new Date();
+            // Match the "HH:00" format in your Python JSON
+            const currentHourStr = now.getHours().toString().padStart(2, '0') + ":00";
             
             document.getElementById("dashboardTitle").innerText = `${region} Strategy | Live AI Forecast`;
 
-            // Filter forecast for the selected region
             const regionData = globalData.forecast.filter(d => d.region === region);
             if (regionData.length === 0) return;
 
-            // Grab the exact 33/83 thresholds calculated by Python for this specific region
-            const p33 = globalData.thresholds[region].p33;
-            const p83 = globalData.thresholds[region].p83;
+            const colorMap = { 'BEST': '#10B981', 'CAUTION': '#F59E0B', 'AVOID': '#EF4444' };
 
-            let xVals = [];
-            let co2Data = [];
-            let priceData = [];
-            let barColors = [];
-            let statuses = [];
-            
-            let bestVal = 9999, bestIdx = 0;
-            let worstVal = -9999, worstIdx = 0;
-            let sumCo2 = 0;
+            let xVals = [], co2Data = [], priceData = [], barColors = [], statuses = [];
+            let bestVal = 999, bestIdx = 0, worstVal = -999, worstIdx = 0, sumCo2 = 0;
 
-            // Loop through the real AI data
             regionData.forEach((row, i) => {
                 xVals.push(row.time);
                 co2Data.push(row.co2);
@@ -247,20 +241,12 @@
                 if (row.co2 < bestVal) { bestVal = row.co2; bestIdx = i; }
                 if (row.co2 > worstVal) { worstVal = row.co2; worstIdx = i; }
 
-                // The Strict 33% / 83% Logic applied to the real data!
-                if (row.co2 <= p33) {
-                    barColors.push('#10B981');
-                    statuses.push({ text: '🟢 BEST', color: '#10B981', type: 'BEST' });
-                } else if (row.co2 > p33 && row.co2 <= p83) {
-                    barColors.push('#F59E0B');
-                    statuses.push({ text: '🟡 CAUTION', color: '#F59E0B', type: 'CAUTION' });
-                } else {
-                    barColors.push('#EF4444');
-                    statuses.push({ text: '🔴 AVOID', color: '#EF4444', type: 'AVOID' });
-                }
+                const color = colorMap[row.status] || '#475569';
+                barColors.push(color);
+                statuses.push({ text: row.status, color: color, type: row.status });
             });
 
-            // Update KPI Cards
+            // Update Header KPIs
             document.getElementById("kpiBestTime").innerText = xVals[bestIdx];
             document.getElementById("kpiBestCo2").innerText = `${bestVal}g CO2`;
             document.getElementById("kpiWorstTime").innerText = xVals[worstIdx];
@@ -270,52 +256,47 @@
             // Update Table
             const tbody = document.getElementById('dataTableBody');
             let tableHTML = '';
-            for(let i = 0; i < regionData.length; i++) {
-                let isCurrent = (i === currentHour);
-                let rowClass = isCurrent ? 'class="highlight-row"' : '';
-                let timeLabel = isCurrent ? `${xVals[i]} (NOW)` : xVals[i];
+            regionData.forEach((row, i) => {
+                const isCurrent = (row.time === currentHourStr);
+                const rowClass = isCurrent ? 'class="highlight-row"' : '';
+                const timeLabel = isCurrent ? `${row.time} (NOW)` : row.time;
 
                 tableHTML += `
                     <tr ${rowClass}>
                         <td>${timeLabel}</td>
-                        <td>${priceData[i].toFixed(3)}</td>
-                        <td>${co2Data[i].toFixed(1)}</td>
-                        <td style="font-weight: 700; color: ${isCurrent ? '#00D1FF' : statuses[i].color}">${statuses[i].text}</td>
+                        <td>${row.price.toFixed(3)}</td>
+                        <td>${row.co2.toFixed(1)}</td>
+                        <td style="font-weight: 700; color: ${statuses[i].color}">${statuses[i].text}</td>
                     </tr>
                 `;
-            }
+
+                // Update Sidebar Sync Status based on current hour
+                if (isCurrent) {
+                    document.getElementById("centerDot").setAttribute("fill", statuses[i].color);
+                    document.getElementById("centerGlow").setAttribute("fill", statuses[i].color);
+                    document.getElementById("tickerStatus").innerText = `${statuses[i].type} NOW`;
+                    document.getElementById("tickerStatus").style.color = statuses[i].color;
+                    document.getElementById("tickerMsg").innerText = `${statuses[i].type} WINDOW ACTIVE`;
+                }
+            });
             tbody.innerHTML = tableHTML;
 
             // Update Chart
-            const traceBars = { x: xVals, y: priceData, type: 'bar', marker: { color: barColors, opacity: 0.4 }, yaxis: 'y1' };
-            const traceLine = { x: xVals, y: co2Data, type: 'scatter', mode: 'lines', line: {color: '#38BDF8', width: 4, shape: 'spline'}, yaxis: 'y2' };
+            const traceBars = { x: xVals, y: priceData, type: 'bar', marker: { color: barColors, opacity: 0.3 }, yaxis: 'y1' };
+            const traceLine = { x: xVals, y: co2Data, type: 'scatter', mode: 'lines', line: {color: '#38BDF8', width: 3, shape: 'spline'}, yaxis: 'y2' };
+            
             const layout = {
                 paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-                font: { color: '#F1F5F9', family: 'Outfit' }, margin: { l: 0, r: 0, t: 0, b: 0 },
+                font: { color: '#F1F5F9', family: 'Outfit' }, margin: { l: 40, r: 40, t: 10, b: 40 },
                 showlegend: false, barmode: 'overlay',
                 xaxis: { showgrid: false, zeroline: false },
-                yaxis: { showgrid: false, zeroline: false, side: 'left' },
-                yaxis2: { showgrid: false, zeroline: false, overlaying: 'y', side: 'right' }
+                yaxis: { showgrid: false, zeroline: false, title: 'Price (DKK)' },
+                yaxis2: { showgrid: false, zeroline: false, overlaying: 'y', side: 'right', title: 'CO2 (g)' }
             };
             Plotly.newPlot('chart', [traceBars, traceLine], layout, {displayModeBar: false});
-
-            // Update Sidebar Clock Colors
-            let currentStatus = statuses[currentHour] || statuses[0];
-            document.getElementById("centerDot").setAttribute("fill", currentStatus.color);
-            document.getElementById("centerGlow").setAttribute("fill", currentStatus.color);
-            document.getElementById("tickerStatus").innerText = `${currentStatus.type} NOW`;
-            document.getElementById("tickerStatus").style.color = currentStatus.color;
-            
-            let duration = 0;
-            for(let i = currentHour; i < regionData.length; i++) {
-                if (statuses[i].type === currentStatus.type) duration++;
-                else break;
-            }
-            let msgMap = { 'BEST': `🟢 SAFE TO CHARGE FOR ${duration}H`, 'AVOID': `🔴 HALT USAGE FOR ${duration}H`, 'CAUTION': `🟡 LIMIT LOAD FOR ${duration}H` };
-            document.getElementById("tickerMsg").innerText = msgMap[currentStatus.type];
         }
 
-        // --- SVG CLOCK ANIMATION ---
+        // --- 3. CLOCK LOGIC ---
         const g = document.getElementById('marks');
         for (let i=0; i<12; i++) {
             const a = (i*30)*(Math.PI/180);
@@ -337,7 +318,7 @@
         }
         setInterval(tick, 1000); tick();
 
-        // Boot up the engine!
+        // Boot the system
         fetchRealData();
     </script>
 </body>
