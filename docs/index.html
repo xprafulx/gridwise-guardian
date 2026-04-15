@@ -9,116 +9,29 @@
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
     <style>
-        body, html {
-            margin: 0; padding: 0; height: 100%; width: 100%;
-            background: radial-gradient(circle at 50% -10%, #1A1F26 0%, #05070A 100%);
-            color: #F1F5F9;
-            font-family: 'Outfit', sans-serif;
-            display: flex;
-            overflow: hidden;
-        }
-
-        h1, h2, h3 {
-            font-family: 'Space Grotesk', sans-serif !important;
-            font-weight: 700 !important;
-            letter-spacing: -0.05em !important;
-            color: #FFFFFF !important;
-            text-shadow: 0 0 20px rgba(255,255,255,0.1);
-            margin-top: 0;
-        }
-
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; background: radial-gradient(circle at 50% -10%, #1A1F26 0%, #05070A 100%); color: #F1F5F9; font-family: 'Outfit', sans-serif; display: flex; overflow: hidden; }
+        h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; font-weight: 700 !important; letter-spacing: -0.05em !important; color: #FFFFFF !important; text-shadow: 0 0 20px rgba(255,255,255,0.1); margin-top: 0; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-
-        aside {
-            width: 320px;
-            min-width: 320px;
-            background-color: #05070A !important;
-            border-right: 1px solid rgba(255, 255, 255, 0.02);
-            display: flex;
-            flex-direction: column;
-            padding: 40px 20px;
-            box-sizing: border-box;
-            z-index: 10;
-        }
-
-        .sidebar-title {
-            font-size: 24px;
-            margin-bottom: 30px;
-        }
-
-        main {
-            flex: 1; 
-            width: 100%;
-            padding: 40px 3%; 
-            overflow-y: auto;
-            box-sizing: border-box;
-        }
-
-        .select-label {
-            font-size: 11px; 
-            color: #475569; 
-            margin-bottom: 5px; 
-            text-transform: uppercase; 
-            letter-spacing: 2px;
-            font-weight: 700;
-        }
-        select {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.05);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            color: #fff;
-            width: 100%;
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 14px;
-            outline: none;
-            cursor: pointer;
-            appearance: none;
-        }
+        aside { width: 320px; min-width: 320px; background-color: #05070A !important; border-right: 1px solid rgba(255, 255, 255, 0.02); display: flex; flex-direction: column; padding: 40px 20px; box-sizing: border-box; z-index: 10; }
+        .sidebar-title { font-size: 24px; margin-bottom: 30px; }
+        main { flex: 1; width: 100%; padding: 40px 3%; overflow-y: auto; box-sizing: border-box; }
+        .select-label { font-size: 11px; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+        select { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 20px; color: #fff; width: 100%; font-family: 'Space Grotesk', sans-serif; font-size: 14px; outline: none; cursor: pointer; appearance: none; }
         select option { background: #05070A; color: #fff; }
-
-        .kpi-container {
-            display: flex; gap: 20px; margin-bottom: 40px; margin-top: 20px; width: 100%;
-        }
-
-        .kpi-card {
-            flex: 1;
-            background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            padding: 30px 20px; border-radius: 16px; text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .kpi-card:hover {
-            border-color: rgba(56, 189, 248, 0.4); background: rgba(255, 255, 255, 0.04); transform: scale(1.02);
-        }
-
+        .kpi-container { display: flex; gap: 20px; margin-bottom: 40px; margin-top: 20px; width: 100%; }
+        .kpi-card { flex: 1; background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%); border: 1px solid rgba(255, 255, 255, 0.04); padding: 30px 20px; border-radius: 16px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .kpi-card:hover { border-color: rgba(56, 189, 248, 0.4); background: rgba(255, 255, 255, 0.04); transform: scale(1.02); }
         .kpi-label { font-size: 0.65rem; color: #475569; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 10px; }
         .kpi-value { font-size: 2.5rem; font-weight: 900; color: #F8FAFC; line-height: 1; font-family: 'Space Grotesk'; }
         .kpi-sub { font-size: 0.85rem; margin-top: 10px; font-weight: 700; letter-spacing: 0.05em; }
-
-        table {
-            width: 100%; border-collapse: collapse; font-family: 'Outfit', sans-serif;
-            font-size: 14px; margin-top: 20px; background: rgba(0,0,0,0.2);
-            border-radius: 10px; overflow: hidden;
-        }
-
-        th { 
-            text-align: left; color: #475569; font-size: 12px; padding: 15px; 
-            border-bottom: 1px solid rgba(255,255,255,0.05); text-transform: uppercase; letter-spacing: 1px;
-        }
-
+        table { width: 100%; border-collapse: collapse; font-family: 'Outfit', sans-serif; font-size: 14px; margin-top: 20px; background: rgba(0,0,0,0.2); border-radius: 10px; overflow: hidden; }
+        th { text-align: left; color: #475569; font-size: 12px; padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); text-transform: uppercase; letter-spacing: 1px; }
         td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); color: #94A3B8; }
-
         .highlight-row { background-color: rgba(0, 209, 255, 0.1) !important; }
         .highlight-row td { font-weight: 900 !important; color: #00D1FF !important; border-bottom: 2px solid #38BDF8 !important; }
-
         .clock-container { display: flex; flex-direction: column; align-items: center; font-family: 'Space Grotesk'; margin-top: 20px; }
-
         @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
     </style>
 </head>
@@ -228,7 +141,6 @@
             
             document.getElementById("dashboardTitle").innerText = `${region} Strategy | Active AI Forecast`;
 
-            // Filter for Region
             let rawRegionData = globalData.forecast.filter(d => d.region === region);
             if (rawRegionData.length === 0) return;
 
@@ -236,7 +148,6 @@
             let cleanData = [];
             let seenHours = new Set();
             
-            // Loop backward through the data so we get the freshest version of each hour
             for (let i = rawRegionData.length - 1; i >= 0; i--) {
                 let row = rawRegionData[i];
                 if (!seenHours.has(row.time)) {
@@ -245,10 +156,7 @@
                 }
             }
             
-            // Sort it chronologically from 00:00 to 23:00
             cleanData.sort((a, b) => a.time.localeCompare(b.time));
-
-            // Ensure we never have more than 24 hours
             let regionData = cleanData.slice(0, 24);
 
             const colorMap = { 'BEST': '#10B981', 'CAUTION': '#F59E0B', 'AVOID': '#EF4444' };
@@ -392,7 +300,6 @@
         }
         setInterval(tick, 1000); tick();
 
-        // Boot system
         fetchRealData();
     </script>
 </body>
