@@ -3,6 +3,7 @@ import os
 import io
 import json
 import joblib
+import time
 import pandas as pd
 import numpy as np
 import holidays
@@ -66,7 +67,7 @@ def download_model_from_neon(area_name):
     buffer = io.BytesIO(result[0])
     payload = joblib.load(buffer)
     
-    # --- 🛠️ THE SCALER FIX 🛠️ ---
+    # Unpack the model, the scaler (for normalization), and the feature list
     return payload['model'], payload['scaler'], payload['features'], result[1]
 
 def fetch_realtime_co2_api(area_name, end_time_cph):
@@ -121,26 +122,35 @@ def get_future_prices(area_name, start_cph, target_cph):
         print(f"❌ Price API Error: {e}")
     return None
 
-# --- 🌦️ THE REAL WEATHER FIX 🌦️ ---
+# --- 🌦️ THE REAL WEATHER FIX (WITH AUTO-RETRY) 🌦️ ---
 def get_future_weather(area_name):
     print(f"🌤️ Fetching real weather forecast for {area_name}...")
     lat = 56.15 if area_name.upper() == 'DK1' else 55.67
     lon = 10.20 if area_name.upper() == 'DK1' else 12.56
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=wind_speed_10m,direct_radiation&timezone=Europe%2FCopenhagen"
     
-    try:
-        res = requests.get(url, timeout=15)
-        if res.status_code == 200:
-            data = res.json()
-            df = pd.DataFrame({
-                'datetime_local': pd.to_datetime(data['hourly']['time']),
-                'wind_speed': data['hourly']['wind_speed_10m'],
-                'solar_radiation': data['hourly']['direct_radiation']
-            })
-            df['datetime_utc'] = df['datetime_local'].dt.tz_localize('Europe/Copenhagen', ambiguous='NaT', nonexistent='shift_forward').dt.tz_convert('UTC')
-            return df.set_index('datetime_utc')[['wind_speed', 'solar_radiation']].to_dict('index')
-    except Exception as e:
-        print(f"❌ Weather API Error: {e}")
+    for attempt in range(3):
+        try:
+            res = requests.get(url, timeout=20) 
+            if res.status_code == 200:
+                data = res.json()
+                df = pd.DataFrame({
+                    'datetime_local': pd.to_datetime(data['hourly']['time']),
+                    'wind_speed': data['hourly']['wind_speed_10m'],
+                    'solar_radiation': data['hourly']['direct_radiation']
+                })
+                df['datetime_utc'] = df['datetime_local'].dt.tz_localize('Europe/Copenhagen', ambiguous='NaT', nonexistent='shift_forward').dt.tz_convert('UTC')
+                return df.set_index('datetime_utc')[['wind_speed', 'solar_radiation']].to_dict('index')
+            else:
+                print(f"⚠️ API Status {res.status_code}. Retrying...")
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout):
+            print(f"⚠️ Weather API Timeout (Attempt {attempt + 1}/3)... retrying in 2s.")
+            time.sleep(2)
+        except Exception as e:
+            print(f"❌ Weather API Critical Error: {e}")
+            break
+            
+    print(f"❌ Weather API failed for {area_name}. Using last known DB weather as fallback.")
     return None
 
 def generate_full_day_forecast(area_name, engine, target_cph):
@@ -161,10 +171,9 @@ def generate_full_day_forecast(area_name, engine, target_cph):
         print(f"⚠️ Missing price data. Skipping {area_name}.")
         return None
 
-    # Fetch the REAL weather for tomorrow!
     future_weather = get_future_weather(area_name)
     
-    # Fallback just in case Open-Meteo goes offline
+    # DB Fallback for weather
     weather_query = f"SELECT wind_speed, solar_radiation FROM processed_features WHERE price_area='{area_name.upper()}' AND is_forecast=FALSE ORDER BY datetime_utc DESC LIMIT 1"
     last_weather = pd.read_sql(weather_query, engine).iloc[0]
     
@@ -183,7 +192,6 @@ def generate_full_day_forecast(area_name, engine, target_cph):
         if p is None:
             p = (t['p33_price'] + t['p83_price']) / 2 
             
-        # Get REAL weather for this exact hour
         if future_weather and time_utc in future_weather:
             current_weather = future_weather[time_utc]
         else:
@@ -202,7 +210,7 @@ def generate_full_day_forecast(area_name, engine, target_cph):
             'co2_lag_24h': history[-24], 'co2_lag_168h': history[-168]
         }
         
-        # --- 🛠️ APPLYING THE SCALER BEFORE PREDICTING 🛠️ ---
+        # --- 🛠️ ML PIPELINE PARITY: Scaling features before prediction ---
         raw_df = pd.DataFrame([feats])[feature_names] 
         scaled_array = scaler.transform(raw_df)       
         
