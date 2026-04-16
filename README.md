@@ -96,6 +96,7 @@ This project utilizes a **Neon PostgreSQL** database as a centralized Metadata S
 ├── docs/                  # Static API JSON and GitHub Pages HTML
 ├── models/                # Serialized XGBoost models (.pkl) for DK1 & DK2
 ├── notebooks/             # EDA and Model Tuning/Bake-off experiments
+├── screenshots/           # Screenshots of Artifacts
 ├── src/
 │   ├── database/          # Neon SQL schema, init, and connection scripts
 │   ├── frontend/          # Streamlit UI (app.py)
