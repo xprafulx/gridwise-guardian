@@ -117,8 +117,7 @@ The fastest way to view the dashboard without downloading the source code.
 docker pull prafulz/greenhour-guardian-app:latest
 ```
 ```bash
-# 2. Run the container
-Make sure you are in the project root folder where your `.env` file is located, then run:
+# 2. Run the container. Make sure you are in the project root folder where your `.env` file is located, then run:
 docker run -d --name greenhour-live -p 8501:8501 --env-file .env prafulz/greenhour-guardian-app:latest
 ```
 
