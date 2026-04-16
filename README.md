@@ -78,6 +78,17 @@ A core component of this MLOps architecture is the complete decoupling of pipeli
 
 ---
 
+## 📊 Artifact Tracking
+
+This project utilizes a **Neon PostgreSQL** database as a centralized Metadata Store to track the four core pillars of MLOps artifacts:
+
+1. **Model Artifacts:** Binaries are stored in the `model_registry` table, ensuring we can "roll back" to any previous version.
+2. **Software Artifacts:** Every model is tagged with a `git_commit_hash`, linking the model directly to the code version in this repository.
+3. **Data Artifacts:** We track "Data Lineage" via `training_start_date` and `training_end_date`, documenting exactly which historical data slice was used for training.The raw and processed datasets are stored in the processed_features table.
+4. **Validation Artifacts:** Performance metrics (MAE, RMSE, R²) are logged daily in `model_performance_history` to detect and visualize model drift over time.
+
+---
+
 ## Repository Structure
 ```text
 .
