@@ -148,7 +148,7 @@ streamlit run src/frontend/app.py
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 Building the Greenhour Guardian end-to-end has been an incredible journey. This pipeline was developed as the final project for the MSc Data Engineering & MLOps program at Aalborg University, and I want to thank everyone who provided guidance along the way.
 
 A massive thank you to the grading committee for taking the time to review this architecture. I also want to extend my gratitude to Aalborg University for providing access to the UCloud and AI Lab computing platforms, which were invaluable for training and testing the models. 
