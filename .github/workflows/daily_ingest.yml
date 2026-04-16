@@ -2,8 +2,8 @@ name: 01 Daily Ingestion
 
 on:
   schedule:
-    # 01:00 CEST (23:00 UTC) - Syncing yesterday's 'Truth'
-    - cron: '0 23 * * *'
+    # 03:00 CEST (01:00 UTC) - Syncing yesterday's 'Truth' after the midnight barrier
+    - cron: '0 1 * * *'
   workflow_dispatch: # Manual trigger for your exam or testing
 
 jobs:
