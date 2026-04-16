@@ -78,7 +78,7 @@ A core component of this MLOps architecture is the complete decoupling of pipeli
 
 ---
 
-## 📊 Artifact Tracking
+## Artifact Tracking
 
 This project utilizes a **Neon PostgreSQL** database as a centralized Metadata Store to track the four core pillars of MLOps artifacts:
 
