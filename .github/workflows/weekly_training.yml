@@ -2,9 +2,9 @@ name: 03 Smart Training
 
 on:
   schedule:
-    # 03:00 CEST = 01:00 UTC
+    # 03:30 CEST = 01:30 UTC
     # Fires every night to check if a retrain is needed!
-    - cron: '0 1 * * *'  
+    - cron: '30 1 * * *'  
   workflow_dispatch:
 
 jobs:
