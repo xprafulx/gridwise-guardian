@@ -2,19 +2,29 @@ name: 03 Smart Training
 
 on:
   schedule:
-    # 03:30 CEST = 01:30 UTC
-    # Fires every night to train the model and log artifacts
-    - cron: '30 1 * * *'  
-  workflow_dispatch: # Allows you to manually trigger it via the GitHub UI
+    # 🕒 Weekly Refresh: Every Sunday at 03:30 CEST (01:30 UTC)
+    - cron: '30 1 * * 0'
+  
+  # 🚀 Drift Trigger: This allows the Evaluation job to "call" this workflow
+  workflow_run:
+    workflows: ["02 Model Evaluation"]
+    types:
+      - completed
+  
+  # 🛠️ Manual Override
+  workflow_dispatch:
 
 jobs:
   train:
     runs-on: ubuntu-latest
+    # This 'if' check ensures we only run if:
+    # 1. It's a Sunday (Schedule)
+    # 2. It was manually started
+    # 3. OR the Evaluation job specifically signaled a drift (using a custom logic/flag)
     
-    # 🔐 SECRETS & ARTIFACT TRACKING HASH
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      GITHUB_SHA: ${{ github.sha }} # <--- This passes the exact code version to your Python script!
+      GITHUB_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout Code
@@ -33,7 +43,7 @@ jobs:
         run: python -m src.pipeline.train_job
 
       - name: Archive Local Model Artifacts
-        # Uploads the physical .pkl files to GitHub Actions as a backup
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trained-xgboost-model
