@@ -2,9 +2,9 @@ name: 02 Model Evaluation
 
 on:
   schedule:
-    # 02:00 CEST = 00:00 UTC
+    # 04:00 CEST = 02:00 UTC
     # Runs right after Ingestion to score the model's performance.
-    - cron: '0 0 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
