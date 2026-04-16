@@ -2,19 +2,14 @@ version: '3.8'
 
 services:
   frontend:
-    # 1. The name of the container when it runs
     container_name: greenhour-guardian-app
-    
-    # 2. Tell Compose to build the image using the Dockerfile in this folder
     build: .
-    
-    # 3. Map the ports exactly like your -p 8501:8501 flag
     ports:
       - "8501:8501"
-      
-    # 4. Automatically inject the secrets from your .env file
     env_file:
       - .env
-      
-    # 5. Automatically restart if the app crashes
+    # --- ADD THIS ONLY IF YOU WANT LIVE UPDATES ---
+    volumes:
+      - .:/app
+    # ----------------------------------------------
     restart: unless-stopped
