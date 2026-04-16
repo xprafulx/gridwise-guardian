@@ -29,7 +29,7 @@ This project implements a complete, end-to-end MLOps lifecycle:
 6. **Live Ingestion (`ingest_job.py`):** Fetches recent weather, price, and CO2 data from APIs and stores it in the database.
 7. **Model Training (`train_job.py`):** Engineers features, trains the geographically isolated XGBoost models (DK1 & DK2), and saves them to the DB.
 8. **Forecasting (`predict_job.py`):** Predicts tomorrow's CO2, makes the 70/30 weighted recommendations, and stores the forecast.
-9. **CI/CD Automation (`run_forecast.py`):** Triggers the prediction job and exports a `latest_forecast.json` file for the frontend.
+9. **UI github (`run_forecast.py`):** Triggers the prediction job and exports a `latest_forecast.json` file for the frontend.
 10. **Evaluation (`evaluate_job.py`):** Evaluates model drift and performance metrics.
 11. **User Interface (`app.py`):** A Streamlit application rendering the dark-mode recommendation dashboard.
 12. **Containerization (`docker-compose.yml`):** Packages the entire environment for reproducible execution.
