@@ -118,7 +118,8 @@ docker pull prafulz/greenhour-guardian-app:latest
 ```
 ```bash
 # 2. Run the container
-docker run -p 8501:8501 prafulz/greenhour-guardian-app:latest
+Make sure you are in the project root folder where your `.env` file is located, then run:
+docker run -d --name greenhour-live -p 8501:8501 --env-file .env prafulz/greenhour-guardian-app:latest
 ```
 
 
