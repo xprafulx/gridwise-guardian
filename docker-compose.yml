@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  frontend:
+  app:
     container_name: greenhour-guardian-app
     build: .
     ports:
