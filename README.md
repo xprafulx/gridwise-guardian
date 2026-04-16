@@ -112,12 +112,13 @@ You have two options to run the Greenhour Guardian locally, depending on your ne
 ### Option A: Quick Start (Pre-built Image)
 The fastest way to view the dashboard without downloading the source code.
 
+#### 1. Pull the pre-built image from Docker Hub
 ```bash
-# 1. Pull the pre-built image from Docker Hub
 docker pull prafulz/greenhour-guardian-app:latest
 ```
+
+#### 2. Run the container. Make sure you are in the project root folder where your `.env` file is located, then run:
 ```bash
-# 2. Run the container. Make sure you are in the project root folder where your `.env` file is located, then run:
 docker run -d --name greenhour-live -p 8501:8501 --env-file .env prafulz/greenhour-guardian-app:latest
 ```
 
