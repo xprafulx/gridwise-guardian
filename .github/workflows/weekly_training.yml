@@ -3,16 +3,18 @@ name: 03 Smart Training
 on:
   schedule:
     # 03:30 CEST = 01:30 UTC
-    # Fires every night to check if a retrain is needed!
+    # Fires every night to train the model and log artifacts
     - cron: '30 1 * * *'  
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to manually trigger it via the GitHub UI
 
 jobs:
   train:
     runs-on: ubuntu-latest
     
+    # 🔐 SECRETS & ARTIFACT TRACKING HASH
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GITHUB_SHA: ${{ github.sha }} # <--- This passes the exact code version to your Python script!
 
     steps:
       - name: Checkout Code
@@ -27,12 +29,11 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Evaluate & Potential Retrain
-        # This script checks: Is it Sunday? OR Is Drift > 0.3?
+      - name: Run Training & Log to Neon Registry
         run: python -m src.pipeline.train_job
 
-      - name: Archive Model Artifacts
-        # Only uploads if the models folder actually changed/exists
+      - name: Archive Local Model Artifacts
+        # Uploads the physical .pkl files to GitHub Actions as a backup
         uses: actions/upload-artifact@v4
         with:
           name: trained-xgboost-model
