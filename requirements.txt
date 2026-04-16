@@ -1,23 +1,21 @@
-# --- CORE WEB & UI ---
-streamlit
-plotly
-
-# --- DATA MANIPULATION & MATH ---
-pandas
-numpy
+# Data Processing
+pandas==2.3.3
+numpy==2.4.3
+holidays==0.94
 pytz
 
-# --- DATABASE & CONNECTION ---
-sqlalchemy
-psycopg2-binary
-python-dotenv
+# Machine Learning & Optimization
+xgboost==2.0.0 # Note: Ensure this matches your training local version
+scikit-learn==1.8.0
+optuna==4.8.0
+joblib==1.5.3
 
-# --- MACHINE LEARNING & AI ---
-xgboost
-scikit-learn
-joblib
-optuna
+# Database & Infrastructure
+SQLAlchemy==2.0.49
+psycopg2-binary==2.9.11
+python-dotenv==1.2.2
+requests==2.32.5
 
-# --- DATA SOURCES & UTILS ---
-requests
-holidays
+# Frontend
+streamlit==1.55.0
+plotly==5.24.1
