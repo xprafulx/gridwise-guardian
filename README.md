@@ -44,16 +44,16 @@ flowchart TD
     Sync[Initial Setup<br/><i>sync_data.py</i>] --> DB[(Neon PostgreSQL<br/>Central Database)]
 
     %% 1. Ingestion Job
-    CRON1((CRON 01:00<br/><i>daily_ingest.yml</i>)) -->|Triggers| Ingest
+    CRON1((CRON 03:00<br/><i>daily_ingest.yml</i>)) -->|Triggers| Ingest
     Ingest[Daily Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB
 
     %% 2. Evaluation Job
-    CRON2((CRON 02:00<br/><i>daily_evaluate.yml</i>)) -->|Triggers| Eval
+    CRON2((CRON 04:00<br/><i>daily_evaluate.yml</i>)) -->|Triggers| Eval
     DB --> Eval[Model Evaluation<br/><i>evaluate_job.py</i><br/>Calculates Evidently Drift]
     Eval -. Saves Metrics .-> DB
 
     %% 3. Training Job
-    CRON3((CRON 03:00 Sun<br/><i>weekly_train.yml</i>)) -->|Triggers| Train
+    CRON3((CRON 03:30 Sun<br/><i>weekly_train.yml</i>)) -->|Triggers| Train
     Eval -->|Drift > 0.3| Train
     DB --> Train[Model Training<br/><i>train_job.py</i><br/>Trains XGBoost]
     Train -. Saves New Model .-> DB
@@ -71,9 +71,9 @@ flowchart TD
 ## Zero-Touch Automation (4-Stage CI/CD)
 A core component of this MLOps architecture is the complete decoupling of pipeline stages. To ensure fault tolerance, the system uses four separate GitHub Actions workflows running on independent CRON schedules:
 
-1. **The Ingestion Shift (`daily_ingest.yml` at 01:00):** Wakes up to securely pull the previous day's finalized weather, price, and actual CO2 data from the APIs and syncs it to Neon.
-2. **The Auditor (`daily_evaluate.yml` at 02:00):** Compares the actual CO2 data from yesterday against the pipeline's predictions. It calculates error metrics and monitors data drift using Evidently AI.
-3. **The Retrainer (`weekly_train.yml` at 03:00, Sundays):** Runs weekly to retrain the XGBoost models on the freshest data. It is also configured to trigger automatically if the Auditor detects an Evidently drift score exceeding `0.3`.
+1. **The Ingestion Shift (`daily_ingest.yml` at 03:00):** Wakes up to securely pull the previous day's finalized weather, price, and actual CO2 data from the APIs and syncs it to Neon.
+2. **The Auditor (`daily_evaluate.yml` at 04:00):** Compares the actual CO2 data from yesterday against the pipeline's predictions. It calculates error metrics and monitors data drift using Evidently AI.
+3. **The Retrainer (`weekly_train.yml` at 03:30, Sundays):** Runs weekly to retrain the XGBoost models on the freshest data. It is also configured to trigger automatically if the Auditor detects an Evidently drift score exceeding `0.3`.
 4. **The Forecaster (`daily_predict.yml` at 20:00):** Wakes up the `run_forecast.py` orchestrator. The orchestrator first triggers the ML models to generate the 70/30 scoring strategy for tomorrow's EV charging, updates the database, and finally pushes the new `latest_forecast.json` file directly to the frontend.
 
 ---
