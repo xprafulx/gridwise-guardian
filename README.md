@@ -109,7 +109,7 @@ This project utilizes a **Neon PostgreSQL** database as a centralized Metadata S
 └── run_forecast.py        # Pipeline trigger and JSON exporter
 ```
 
-## 🚀 Quickstart & Local Setup
+## Quickstart & Local Setup
 
 ### 1. Configuration
 Create a `.env` file in the root directory and add your Neon PostgreSQL connection string. 
