@@ -1,6 +1,5 @@
 # Greenhour Guardian: DK1 CO₂-aware EV Charging Signal
 
-[![Live Dashboard](https://img.shields.io/badge/Live_Dashboard-Greenhour_Guardian-10B981?style=for-the-badge\&logo=streamlit)](https://app-greenhour.cloud.sdu.dk)
 
 Greenhour Guardian is an MLOps-based semester project that predicts CO₂ intensity for Denmark’s DK1 electricity price area and creates a CO₂-aware price signal for electric vehicle charging.
 
