@@ -516,24 +516,6 @@ It displays:
 
 ---
 
-## Dashboard Logic
-
-```mermaid
-flowchart LR
-    A[(co2_aware_price_signals)] --> B[Streamlit Dashboard]
-    B --> C[Top KPI Cards]
-    B --> D[Normalized Comparison Chart]
-    B --> E[Original Price and CO₂ Chart]
-    B --> F[Hourly BEST/CAUTION/AVOID Table]
-
-    C --> C1[Avoid Hour]
-    C --> C2[Average Price]
-    C --> C3[Average CO₂]
-    C --> C4[Best Hour]
-```
-
----
-
 ## Docker
 
 Build the Docker image:
