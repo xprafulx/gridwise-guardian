@@ -2,29 +2,34 @@ name: 03 Smart Training
 
 on:
   schedule:
-    # 🕒 Weekly Refresh: Every Sunday at 03:30 CEST (01:30 UTC)
-    - cron: '30 1 * * 0'
-  
-  # 🚀 Drift Trigger: Listens to the Evaluation job
+    # Weekly refresh every Sunday
+    # 03:30 Denmark time during summer/CEST
+    # 02:30 Denmark time during winter/CET
+    # GitHub cron uses UTC
+    - cron: "30 1 * * 0"
+
+  # Drift trigger: listens to the evaluation workflow
   workflow_run:
     workflows: ["02 Model Evaluation"]
     types:
       - completed
-  
-  # 🛠️ Manual Override
+
+  # Manual override
   workflow_dispatch:
 
 jobs:
   train:
     runs-on: ubuntu-latest
-    
-    # 🛑 THE SMART TRIGGER LOGIC 🛑
-    # Run if: It's Sunday OR you clicked run OR Evaluation found the "🚨 ALERT" and failed
+
+    # Run if:
+    # 1. Weekly schedule
+    # 2. Manual trigger
+    # 3. Evaluation workflow failed because drift/low accuracy was detected
     if: >
-      github.event_name == 'schedule' || 
-      github.event_name == 'workflow_dispatch' || 
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure')
-    
+
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       GITHUB_SHA: ${{ github.sha }}
@@ -36,19 +41,28 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Training & Log to Neon Registry
+      - name: Sanity Check Secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ DATABASE_URL is empty."
+            exit 1
+          else
+            echo "✅ DATABASE_URL is loaded."
+          fi
+
+      - name: Run Training and Log to Neon Registry
         run: python -m src.pipeline.train_job
 
-      - name: Archive Local Model Artifacts
+      - name: Archive Training Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trained-xgboost-model
-          path: models/
+          name: training-logs-${{ github.run_id }}
+          path: artifacts/
           retention-days: 30

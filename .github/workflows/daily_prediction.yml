@@ -2,74 +2,57 @@ name: 04 Daily Forecast
 
 on:
   schedule:
-    # 20:00 CEST = 18:00 UTC
-    - cron: '0 18 * * *'
+    # 20:00 Denmark time during summer/CEST
+    # 19:00 Denmark time during winter/CET
+    # GitHub cron uses UTC
+    - cron: "0 18 * * *"
+
   workflow_dispatch:
 
-# --- CRITICAL NEW PERMISSION ---
-# This allows the GitHub Actions bot to push code back to your repo
-permissions:
-  contents: write
-
 jobs:
-  predict:
+  forecast:
     runs-on: ubuntu-latest
+
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ENTSOE_TOKEN: ${{ secrets.ENTSOE_TOKEN }}
 
     steps:
       - name: Checkout Code
-        # fetch-depth: 0 is important so it checks out the full git history for pushing
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Sanity Check Secret
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Sanity Check Secrets
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "❌ THE SECRET IS EMPTY. GitHub is failing to load it."
+            echo "❌ DATABASE_URL is empty."
             exit 1
           else
-            echo "✅ THE SECRET IS LOADED. Python should be able to see it."
+            echo "✅ DATABASE_URL is loaded."
           fi
-          
-      # --- THIS IS THE STEP THAT WAS MISSING ---
-      - name: Generate Strategy & Export JSON
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+          if [ -z "$ENTSOE_TOKEN" ]; then
+            echo "❌ ENTSOE_TOKEN is empty."
+            exit 1
+          else
+            echo "✅ ENTSOE_TOKEN is loaded."
+          fi
+
+      - name: Run Prediction and Recommendation
         run: python run_forecast.py
-          
-      - name: Push Static API to GitHub
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Safely check if the file was actually generated before trying to push
-          if [ -f docs/latest_forecast.json ]; then
-            git add docs/latest_forecast.json
-            git commit -m "auto: sync daily forecast JSON for UI" || echo "No changes to commit"
-            git push
-          else
-            echo "❌ FATAL: The JSON file was never created! Python must have failed."
-            exit 1
-          fi
 
       - name: Archive Forecast Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: forecast-logs-${{ github.run_id }}
-          # We changed this from 'artifacts/' to the actual docs folder so it stops giving you warnings!
-          path: docs/
+          path: artifacts/
           retention-days: 3
