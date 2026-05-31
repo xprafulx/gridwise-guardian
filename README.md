@@ -1,171 +1,545 @@
-# Greenhour Guardian: Smart EV Charging Pipeline
+# Greenhour Guardian: DK1 CO₂-aware EV Charging Signal
 
-[![Live Dashboard](https://img.shields.io/badge/Live_Dashboard-app--greenhour.cloud.sdu.dk-10B981?style=for-the-badge&logo=streamlit)](https://app-greenhour.cloud.sdu.dk)
 
-> An intelligent MLOps pipeline actively predicting the Danish grid's "dirty hours" to find the optimal window for EV charging.
+Greenhour Guardian is an MLOps-based semester project that predicts CO₂ intensity for Denmark’s DK1 electricity price area and creates a CO₂-aware price signal for electric vehicle charging.
 
-## Our Mission: Protecting the Grid's Darkest Hours
-Every evening between 17:00 and 21:00, the energy grid undergoes massive stress. Families come home, heaters turn on, and dinner starts cooking. When renewable energy like wind and solar cannot keep up with this sudden spike in demand, the grid panics and is forced to ignite highly polluting fossil-fuel "peaker plants."
-
-If thousands of Electric Vehicles plug in during this exact window, it forces the grid to burn even more fossil fuels, defeating the purpose of driving a green car. **The Greenhour Guardian** was built to solve this. It actively predicts the grid's carbon intensity and aggressively warns users to **AVOID** charging during stress hours, mathematically hunting for the greenest window to quietly fuel the future.
-
-## Why Exactly 6 Hours?
-The pipeline is engineered to find a contiguous **6-hour charging block**. This is not an arbitrary number; it is based on European EV hardware standards:
-* **Charger Output:** A standard European 3-phase home charger delivers **11 kW**.
-* **Battery Capacity:** A standard EV battery (e.g., Tesla Model 3 SR, VW ID.4) is roughly **60-70 kWh**.
-* **The Math:** 11 kW * 6 hours = **66 kWh** (A full 0-100% charge).
-Giving the user less than 6 hours risks an uncharged car. Giving them more risks pushing charging into dirty, fossil-heavy hours.
+The project focuses on DK1 because Aalborg is located in the DK1 price area. The system combines DK1 day-ahead electricity price with predicted CO₂ intensity to identify more favourable and less favourable EV charging hours.
 
 ---
 
-## Pipeline Architecture
-This project implements a complete, end-to-end MLOps lifecycle:
+## Project Objective
 
-1. **Dataset Creation (`notebooks/`):** Compiled 2011-2026 data (ds, price_area, spot_price, co2, wind, solar) and hosted it on Hugging Face.
-2. **Schema Definition (`schema.sql`):** Standardized rules to create and define the database tables.
-3. **Database Engine (`connection.py`):** Establishes a secure SQLAlchemy connection to the Neon PostgreSQL database.
-4. **Initialization (`initialize.py`):** Executes the schema to build the database infrastructure.
-5. **Data Sync (`sync_data.py`):** Pulls the historical dataset from Hugging Face and aligns it into Neon.
-6. **Live Ingestion (`ingest_job.py`):** Fetches recent weather, price, and CO2 data from APIs and stores it in the database.
-7. **Model Training (`train_job.py`):** Engineers features, trains the geographically isolated XGBoost models (DK1 & DK2), and saves them to the DB.
-8. **Forecasting (`predict_job.py`):** Predicts tomorrow's CO2, makes the 70/30 weighted recommendations, and stores the forecast.
-9. **UI github (`run_forecast.py`):** Triggers the prediction job and exports a `latest_forecast.json` file for the frontend.
-10. **Evaluation (`evaluate_job.py`):** Evaluates model drift and performance metrics.
-11. **User Interface (`app.py`):** A Streamlit application rendering the dark-mode recommendation dashboard.
-12. **Containerization (`docker-compose.yml`):** Packages the entire environment for reproducible execution.
+The objective of this project is to develop a CO₂-aware price signal for EV charging by combining:
+
+* DK1 day-ahead electricity price
+* Predicted DK1 CO₂ intensity
+* Weather forecast features
+* Load forecast features
+* Historical CO₂ lag, rolling, and difference features
+* Time-based features
+
+The final output is not an official electricity tariff. It is a normalized decision-support signal that helps compare charging hours using both electricity price and predicted emissions.
+
+---
+
+## Final Output
+
+The final output is stored in the `co2_aware_price_signals` table.
+
+It contains:
+
+* DK1 electricity price
+* Predicted CO₂ intensity
+* Normalized price
+* Normalized CO₂
+* Raw CO₂-aware price signal
+* BEST / CAUTION / AVOID recommendation label
+
+The final signal is:
+
+```python
+raw_co2_aware_signal = 0.5 * normalized_price + 0.5 * normalized_co2
+```
+
+A lower signal means a more favourable charging hour.
+A higher signal means a less favourable charging hour.
+
+---
+
+## Why Price and CO₂ Are Normalized
+
+Price and CO₂ have different units and scales:
+
+| Variable              | Unit     |
+| --------------------- | -------- |
+| `spot_price_dkk_kwh`  | DKK/kWh  |
+| `predicted_co2_g_kwh` | gCO₂/kWh |
+
+If they were combined directly, the larger numerical scale could dominate the result. Therefore, both values are converted to a 0–1 scale using min-max normalization.
+
+```python
+normalized_price = (price - min(price)) / (max(price) - min(price))
+
+normalized_co2 = (predicted_co2 - min(predicted_co2)) / (max(predicted_co2) - min(predicted_co2))
+```
+
+A normalized value of `0` does not mean the price or CO₂ is zero. It means it is the lowest value within the selected 24-hour target day.
+
+---
+
+## Recommendation Logic
+
+The recommendation is based on the `raw_co2_aware_signal`.
+
+For each target day:
+
+| Signal group | Label   | Meaning                         |
+| ------------ | ------- | ------------------------------- |
+| Lowest 25%   | BEST    | More favourable charging period |
+| Middle 50%   | CAUTION | Moderate or mixed condition     |
+| Highest 25%  | AVOID   | Less favourable charging period |
+
+This makes the recommendation relative to the daily forecast window.
+
+---
+
+## Version 2 Summary
+
+Version 2 is a cleaner DK1-only pipeline.
+
+Main changes:
+
+* Project scope changed to DK1 only
+* Removed smoothing logic
+* Removed `smoothed_co2_aware_signal`
+* Removed `smoothing_window`
+* Final signal is now `raw_co2_aware_signal`
+* Removed wind and solar production forecast features because full next-day values were not consistently available
+* Prediction output is stored only in `ai_forecasts`
+* Final signal and recommendation are stored in `co2_aware_price_signals`
+* Streamlit dashboard reads from `co2_aware_price_signals`
+* Dashboard compares price, predicted CO₂, and CO₂-aware signal
+
+---
+
+## Removed Features
+
+The following features were removed from the final model and prediction pipeline:
+
+```text
+forecast_wind_generation_mw
+forecast_solar_generation_mw
+forecast_wind_generation_gw
+forecast_solar_generation_gw
+```
+
+Reason:
+
+These future production forecast values were not consistently available for the full next-day prediction horizon at the time the prediction job was executed.
+
+The model still uses weather-based renewable-related features:
+
+```text
+wind_speed
+solar_radiation
+temperature
+```
+
+---
+
+## Technology Stack
+
+* Python
+* Pandas
+* NumPy
+* SQLAlchemy
+* Neon PostgreSQL
+* Hugging Face dataset storage
+* Energi Data Service API
+* Open-Meteo API
+* ENTSO-E API
+* XGBoost
+* Optuna
+* Scikit-learn
+* Streamlit
+* Plotly
+* Docker
+* GitHub Actions
+
+---
+
+## System Architecture
 
 ```mermaid
 flowchart TD
-    %% External Data Sources
-    HF[Historical Data<br/>Hugging Face Dataset] --> Sync
-    API[Energi Data Service APIs] --> Ingest
+    A[Historical DK1 Dataset<br/>Jupyter Notebook] --> B[Hugging Face Dataset Storage]
+    B --> C[sync_data.py]
+    C --> D[(Neon PostgreSQL<br/>processed_features)]
 
-    %% Initial Setup
-    Sync[Initial Setup<br/><i>sync_data.py</i>] --> DB[(Neon PostgreSQL<br/>Central Database)]
+    E[Energi Data Service<br/>CO₂ + Day-ahead Price] --> F[ingest_job.py]
+    G[Open-Meteo API<br/>Weather Forecast] --> F
+    H[ENTSO-E API<br/>Load Forecast] --> F
+    F --> D
 
-    %% 1. Ingestion Job
-    CRON1((CRON 03:00<br/><i>daily_ingest.yml</i>)) -->|Triggers| Ingest
-    Ingest[Daily Ingestion<br/><i>ingest_job.py</i><br/>Pulls Yesterday's Actuals] --> DB
+    D --> I[train_job.py<br/>XGBoost + Optuna]
+    I --> J[(model_registry<br/>Active Model: co2_dk1)]
 
-    %% 2. Evaluation Job
-    CRON2((CRON 04:00<br/><i>daily_evaluate.yml</i>)) -->|Triggers| Eval
-    DB --> Eval[Model Evaluation<br/><i>evaluate_job.py</i><br/>Calculates Evidently Drift]
-    Eval -. Saves Metrics .-> DB
+    D --> K[predict_job.py]
+    J --> K
+    E --> K
+    G --> K
+    H --> K
 
-    %% 3. Training Job
-    CRON3((CRON 03:30 Sun<br/><i>weekly_train.yml</i>)) -->|Triggers| Train
-    Eval -->|Drift > 0.3| Train
-    DB --> Train[Model Training<br/><i>train_job.py</i><br/>Trains XGBoost]
-    Train -. Saves New Model .-> DB
+    K --> L[(ai_forecasts<br/>Predicted CO₂ + Features)]
 
-    %% 4. Prediction Job & Export (The Orchestrator)
-    CRON4((CRON 20:00<br/><i>daily_predict.yml</i>)) -->|Triggers| RunForecast
-    RunForecast[Orchestrator<br/><i>run_forecast.py</i>] -->|1. Predicts Data| Predict
-    Predict[<i>predict_job.py</i><br/>Tomorrow's CO2 & 70/30 Split] -. Saves Forecast .-> DB
-    RunForecast -->|2. Stores Data| JSON[/docs/latest_forecast.json/]
-    
-    JSON --> UI[Streamlit Frontend<br/><i>app.py</i><br/>Interactive Dashboard]
+    L --> M[recommendation_job.py<br/>Create Raw CO₂-aware Signal]
+    M --> N[(co2_aware_price_signals<br/>Signal + Recommendation)]
+
+    L --> O[evaluate_job.py]
+    D --> O
+    O --> P[(model_performance_history)]
+
+    N --> Q[Streamlit Dashboard<br/>src/frontend/app.py]
 ```
----
-
-## Zero-Touch Automation (4-Stage CI/CD)
-A core component of this MLOps architecture is the complete decoupling of pipeline stages. To ensure fault tolerance, the system uses four separate GitHub Actions workflows running on independent CRON schedules:
-
-1. **The Ingestion Shift (`daily_ingest.yml` at 03:00):** Wakes up to securely pull the previous day's finalized weather, price, and actual CO2 data from the APIs and syncs it to Neon.
-2. **The Auditor (`daily_evaluate.yml` at 04:00):** Compares the actual CO2 data from yesterday against the pipeline's predictions. It calculates error metrics and monitors data drift using Evidently AI.
-3. **The Retrainer (`weekly_train.yml` at 03:30, Sundays):** Runs weekly to retrain the XGBoost models on the freshest data. It is also configured to trigger automatically if the Auditor detects an Evidently drift score exceeding `0.3`.
-4. **The Forecaster (`daily_predict.yml` at 20:00):** Wakes up the `run_forecast.py` orchestrator. The orchestrator first triggers the ML models to generate the 70/30 scoring strategy for tomorrow's EV charging, updates the database, and finally pushes the new `latest_forecast.json` file directly to the frontend.
-
----
-
-## Artifact Tracking
-
-This project utilizes a **Neon PostgreSQL** database as a centralized Metadata Store to track the four core pillars of MLOps artifacts:
-
-1. **Model Artifacts:** Binaries are stored in the `model_registry` table, ensuring we can "roll back" to any previous version.
-2. **Software Artifacts:** Every model is tagged with a `git_commit_hash`, linking the model directly to the code version in this repository.
-3. **Data Artifacts:** We track "Data Lineage" via `training_start_date` and `training_end_date`, documenting exactly which historical data slice was used for training.The raw and processed datasets are stored in the processed_features table.
-4. **Validation Artifacts:** Performance metrics (MAE, RMSE, R²) are logged daily in `model_performance_history` to detect and visualize model drift over time.
 
 ---
 
 ## Repository Structure
+
 ```text
 .
-├── data/                  # Raw and processed CSV datasets
-├── docs/                  # Static API JSON and GitHub Pages HTML
-├── models/                # Serialized XGBoost models (.pkl) for DK1 & DK2
-├── notebooks/             # EDA and Model Tuning/Bake-off experiments
-├── screenshots/           # Screenshots of Artifacts
+├── notebooks/
+│   └── 01_eda.ipynb
 ├── src/
-│   ├── database/          # Neon SQL schema, init, and connection scripts
-│   ├── frontend/          # Streamlit UI (app.py)
-│   ├── pipeline/          # Core MLOps jobs (ingest, train, predict, evaluate)
-│   └── utils/             # Logging and helpers
-├── test/                  # Sanity checks and pre-production test scripts
-├── docker-compose.yml     # Container orchestration
-├── Dockerfile             # Image definition
-├── requirements.txt       # Python dependencies
-└── run_forecast.py        # Pipeline trigger and JSON exporter
+│   ├── database/
+│   │   └── connection.py
+│   ├── frontend/
+│   │   └── app.py
+│   ├── pipeline/
+│   │   ├── sync_data.py
+│   │   ├── ingest_job.py
+│   │   ├── train_job.py
+│   │   ├── predict_job.py
+│   │   ├── recommendation_job.py
+│   │   └── evaluate_job.py
+│   └── utils/
+│       └── logger.py
+├── .github/
+│   └── workflows/
+│       ├── daily_ingest.yml
+│       ├── daily_prediction.yml
+│       └── weekly_training.yml
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── run_forecast.py
+├── .dockerignore
+├── .gitignore
+└── README.md
 ```
 
-## Quickstart & Local Setup
+---
 
-### 1. Configuration
-Create a `.env` file in the root directory and add your Neon PostgreSQL connection string. 
+## Main Pipeline Files
 
-* **Format:** `DATABASE_URL=postgresql://[user]:[password]@[endpoint_hostname]/[dbname]?sslmode=require`
-* **Example:** `DATABASE_URL=postgresql://neondb_owner:MySecretPass123@ep-cool-sun-12345.eu-central-1.aws.neon.tech/neondb?sslmode=require`
+| File                    | Purpose                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `sync_data.py`          | Downloads historical CSV from Hugging Face and syncs it to Neon                          |
+| `ingest_job.py`         | Fetches recent actual and forecast data and updates `processed_features`                 |
+| `train_job.py`          | Trains DK1 XGBoost model and stores it in `model_registry`                               |
+| `predict_job.py`        | Predicts DK1 CO₂ and stores output in `ai_forecasts`                                     |
+| `recommendation_job.py` | Creates raw CO₂-aware signal and labels, then stores output in `co2_aware_price_signals` |
+| `evaluate_job.py`       | Compares predicted CO₂ with actual CO₂ and stores metrics                                |
+| `app.py`                | Streamlit dashboard                                                                      |
+| `run_forecast.py`       | Runs prediction and recommendation together                                              |
 
-## How to Run the Project
+---
 
-You have two options to run the Greenhour Guardian locally, depending on your needs.
+## Model Features
 
-### Option A: Quick Start (Pre-built Image)
-The fastest way to view the dashboard without downloading the source code.
+The active DK1 model uses 26 features:
 
-#### 1. Pull the pre-built image from Docker Hub
+```text
+spot_price_dkk_kwh
+wind_speed
+solar_radiation
+temperature
+forecast_load_gw
+
+co2_lag_1h
+co2_lag_2h
+co2_lag_24h
+co2_lag_168h
+
+co2_rolling_3h
+co2_rolling_6h
+co2_rolling_24h
+
+co2_diff_1h
+co2_diff_24h
+
+hour
+day_of_week
+month
+day_of_year
+
+hour_sin
+hour_cos
+month_sin
+month_cos
+day_of_year_sin
+day_of_year_cos
+
+is_weekend
+is_holiday
+```
+
+---
+
+## Unit Handling
+
+The database keeps source units:
+
+| Column                | Unit     |
+| --------------------- | -------- |
+| `spot_price_dkk_kwh`  | DKK/kWh  |
+| `co2_emissions_g_kwh` | gCO₂/kWh |
+| `forecast_load_mw`    | MW       |
+
+For model input only:
+
+```python
+forecast_load_gw = forecast_load_mw / 1000
+```
+
+The database keeps `forecast_load_mw` in MW.
+
+---
+
+## Time Handling
+
+The project uses Copenhagen time to define target Danish days, but stores timestamps in UTC.
+
+Example during Danish summer time:
+
+```text
+00:00–23:00 Copenhagen time
+=
+22:00 previous day UTC → 21:00 target day UTC
+```
+
+This avoids timestamp mismatch between APIs, forecasting jobs, and database storage.
+
+---
+
+## Installation
+
+Clone the repository:
+
 ```bash
-docker pull prafulz/greenhour-guardian-app:latest
+git clone <your-repository-url>
+cd gridwise-guardian
 ```
 
-#### 2. Run the container. Make sure you are in the project root folder where your `.env` file is located, then run:
-```bash
-docker run -d --name greenhour-live -p 8501:8501 --env-file .env prafulz/greenhour-guardian-app:latest
-```
-
-
-### Option B: Build from Source (Developer Mode)
-Use this method if you want to modify the code or spin up the entire pipeline architecture.
+Create and activate a virtual environment:
 
 ```bash
-# 1. Clone this repository and navigate into the folder
-
-# 2. Build and spin up the containers in the background
-docker-compose up -d --build
-
-# To view live logs:
-docker-compose logs -f
-
-# To shut down the pipeline:
-docker-compose down
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-### 3. Launch the Dashboard
-To view the Streamlit interface locally:
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+DATABASE_URL=your_neon_database_url
+ENTSOE_TOKEN=your_entsoe_api_token
+```
+
+Do not commit `.env` to GitHub.
+
+Required GitHub Secrets:
+
+```text
+DATABASE_URL
+ENTSOE_TOKEN
+```
+
+---
+
+## Running Locally
+
+Run daily ingestion:
+
+```bash
+python -m src.pipeline.ingest_job
+```
+
+Train the model:
+
+```bash
+python -m src.pipeline.train_job
+```
+
+Run prediction:
+
+```bash
+python -m src.pipeline.predict_job
+```
+
+Run recommendation:
+
+```bash
+python -m src.pipeline.recommendation_job
+```
+
+Run prediction and recommendation together:
+
+```bash
+python run_forecast.py
+```
+
+Run evaluation:
+
+```bash
+python -m src.pipeline.evaluate_job
+```
+
+---
+
+## Streamlit Dashboard
+
+Run:
+
 ```bash
 streamlit run src/frontend/app.py
 ```
----
+
+The dashboard reads from:
+
+```text
+co2_aware_price_signals
+```
+
+It displays:
+
+* Avoid hour
+* Average price
+* Average predicted CO₂
+* Best hour
+* Normalized comparison chart
+* Original price and CO₂ chart
+* Hourly recommendation table
 
 ---
 
-## Acknowledgments
-Building the Greenhour Guardian end-to-end has been an incredible journey. This pipeline was developed as the final project for the MSc Data Engineering & MLOps program at Aalborg University, and I want to thank everyone who provided guidance along the way.
+## Docker
 
-A massive thank you to the grading committee for taking the time to review this architecture. I also want to extend my gratitude to Aalborg University for providing access to the UCloud and AI Lab computing platforms, which were invaluable for training and testing the models. 
+Build the Docker image:
 
-Finally, thank you to the open-source community, Neon Database for the brilliant serverless infrastructure, and the AI assistants (Google Gemini, Claude, and ChatGPT) that served as pair programmers and brainstorming partners throughout this build.
+```bash
+docker build -t greenhour-guardian .
+```
 
-Kindest regards,  
+Run the container:
+
+```bash
+docker run -p 8501:8501 \
+  -e DATABASE_URL="$DATABASE_URL" \
+  -e ENTSOE_TOKEN="$ENTSOE_TOKEN" \
+  greenhour-guardian
+```
+
+Then open:
+
+```text
+http://localhost:8501
+```
+
+---
+
+## Docker Compose
+
+Run with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://localhost:8501
+```
+
+---
+
+## GitHub Actions Workflows
+
+The project uses GitHub Actions for automation.
+
+| Workflow              | Purpose                                  |
+| --------------------- | ---------------------------------------- |
+| `01 Daily Ingestion`  | Updates `processed_features`             |
+| `02 Model Evaluation` | Evaluates yesterday’s prediction         |
+| `03 Smart Training`   | Retrains weekly or when evaluation fails |
+| `04 Daily Forecast`   | Runs prediction and recommendation       |
+
+```mermaid
+flowchart TD
+    A[01 Daily Ingestion<br/>03:00 CPH approx.] --> B[(processed_features)]
+    B --> C[02 Model Evaluation]
+    C --> D[(model_performance_history)]
+
+    E[03 Smart Training<br/>Weekly or Drift Trigger] --> F[(model_registry)]
+
+    F --> G[04 Daily Forecast]
+    B --> G
+    G --> H[(ai_forecasts)]
+    H --> I[(co2_aware_price_signals)]
+```
+
+---
+
+## Model Evaluation
+
+The evaluation job compares:
+
+```text
+predicted CO₂ from ai_forecasts
+vs
+actual CO₂ from processed_features
+```
+
+Metrics saved to `model_performance_history`:
+
+* MAE
+* RMSE
+* R²
+* Accuracy percentage
+* Mean actual CO₂
+* Row count
+
+If model accuracy drops below the configured threshold, the workflow can fail intentionally and trigger smart retraining.
+
+---
+
+## Academic Note
+
+This project is inspired by carbon-aware EV charging and dynamic tariff literature, but it does not implement a full stochastic optimization tariff model.
+
+Instead, it uses a transparent and interpretable normalized weighted signal:
+
+```python
+raw_co2_aware_signal = 0.5 * normalized_price + 0.5 * normalized_co2
+```
+
+This makes the method easy to explain, implement, and evaluate in an MLOps pipeline.
+
+---
+
+## Version
+
+Current version:
+
+```text
+v2.0 — DK1 CO₂-aware price signal pipeline
+```
+
+---
+
+## Author
+
 **Praful Shrestha**
+
+MSc Business Data Science
+Aalborg University

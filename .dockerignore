@@ -1,6 +1,54 @@
-__pycache__
-*.pyc
-.git
-.venv
-venv
+# Environment / secrets
 .env
+.env.*
+!.env.example
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Local artifacts / logs
+artifacts/
+logs/
+*.log
+
+# Model/local generated files
+models/
+*.pkl
+*.joblib
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files not needed inside image
+docker-compose.yml
+Dockerfile
+
+# Editor files
+.vscode/
+.idea/
+
+# Node/frontend cache if any
+node_modules/
+dist/
+build/

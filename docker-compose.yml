@@ -1,15 +1,17 @@
-version: '3.8'
-
 services:
   app:
     container_name: greenhour-guardian-app
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+
     ports:
       - "8501:8501"
+
     env_file:
       - .env
-    # --- ADD THIS ONLY IF YOU WANT LIVE UPDATES ---
+
     volumes:
       - .:/app
-    # ----------------------------------------------
+
     restart: unless-stopped

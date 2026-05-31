@@ -2,18 +2,21 @@ name: 01 Daily Ingestion
 
 on:
   schedule:
-    # 03:00 CEST (01:00 UTC) - Syncing yesterday's 'Truth' after the midnight barrier
-    - cron: '0 1 * * *'
-  workflow_dispatch: # Manual trigger for your exam or testing
+    # 03:00 Denmark time during summer/CEST
+    # 02:00 Denmark time during winter/CET
+    # GitHub cron uses UTC
+    - cron: "0 1 * * *"
+
+  workflow_dispatch: # Manual trigger for testing/exam
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    
-    # WE CALL THE DATABASE HERE
+
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-    
+      ENTSOE_TOKEN: ${{ secrets.ENTSOE_TOKEN }}
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -21,14 +24,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
       - name: Execute Ingestion Job
-        # Running as a module ensures internal 'src' imports are seductive and smooth
         run: python -m src.pipeline.ingest_job
 
       - name: Archive Run Logs
